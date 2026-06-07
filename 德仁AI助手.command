@@ -1,6 +1,6 @@
 #!/bin/bash
 # 德仁口腔 AI 助手 - Mac 桌面快捷启动
-# 放到桌面上，双击即可启动（程序本体在坚果云里）
+# 放到桌面上，双击即可启动（程序本体在坚果云里，自动从GitHub更新）
 
 APP_DIR="$HOME/我的坚果云/德仁AI助手v2-部署包"
 
@@ -14,8 +14,14 @@ fi
 
 cd "$APP_DIR" || exit 1
 
-# 赋予执行权限（首次需要）
+# 赋予执行权限
 chmod +x start.command 2>/dev/null
+
+# ---------- 自动更新（从GitHub）----------
+if [ -f "check_update.py" ]; then
+    python3 check_update.py 2>/dev/null || python check_update.py 2>/dev/null || echo "(跳过更新检查)"
+    echo ""
+fi
 
 # 检查 Node.js
 if ! command -v node &> /dev/null; then
@@ -32,9 +38,8 @@ if [ ! -d "node_modules/ws" ]; then
     echo ""
 fi
 
-# 启动服务并自动打开浏览器
+# 启动
 echo "🚀 启动中..."
 sleep 1
 open http://localhost:8080 2>/dev/null &
-
 node server.js

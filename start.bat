@@ -1,36 +1,40 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
+setlocal enabledelayedexpansion
 
 echo ================================
-echo   DR AI v2 Starting...
+echo   德仁口腔 AI 助手 v2
 echo ================================
-if exist version.txt (
-    set /p VER=<version.txt
-    echo   Version: !VER!
+
+:: ---------- 自动更新 ----------
+if exist check_update.py (
+    echo 检查更新...
+    python check_update.py 2>nul
+    if !errorlevel! neq 0 (
+        echo (跳过更新检查^)
+    )
+    echo.
 )
-echo   💡 更新方法: 替换 index.html, server.js, version.txt 后重启
-echo.
 
 :: 检查 Node.js
 where node >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERROR] 未找到 Node.js，请先安装 https://nodejs.org
+    echo [错误] 未找到 Node.js，请安装 https://nodejs.org
     pause
     exit /b 1
 )
-node -v
 
-:: 首次运行安装依赖
+:: 首次安装依赖
 if not exist "node_modules\ws" (
     echo [首次运行] 安装依赖中...
     call npm install
     echo.
 )
 
-:: 启动服务
-echo [启动] 服务运行在 http://localhost:8080
-echo 按 Ctrl+C 停止服务
+:: 启动
+echo [启动] http://localhost:8080
+echo 按 Ctrl+C 停止
 echo.
 node server.js
 pause
