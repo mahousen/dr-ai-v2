@@ -1,0 +1,3182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>德仁口腔 · AI病历助手 v2.0.20260607c</title>
+<script>
+// 版本自动检查 —— 如果 version.txt 版本号更新，提示用户刷新
+(async () => {
+  try {
+    const r = await fetch('version.txt?_=' + Date.now());
+    const latest = (await r.text()).trim();
+    const cur = 'v2.0.20260607c';
+    if (latest && latest !== cur) {
+      const bar = document.createElement('div');
+      bar.innerHTML = '⚡ 发现新版本 <b>' + latest + '</b>，请 <a href="javascript:location.reload(true)" style="color:#fff;text-decoration:underline;cursor:pointer">点击刷新</a> 或重启程序';
+      bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#e74c3c;color:#fff;text-align:center;padding:8px;font-size:13px;z-index:99999;cursor:pointer';
+      bar.onclick = () => location.reload(true);
+      document.body.prepend(bar);
+    }
+  } catch(e) {}
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<style>
+/* ========== RESET & VARS ========== */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --blue:#2563eb;--blued:#1d4ed8;--bluel:#dbeafe;
+  --green:#16a34a;--yellow:#f59e0b;--red:#dc2626;--cyan:#06b6d4;
+  --gy1:#f9fafb;--gy2:#f3f4f6;--gy3:#e5e7eb;--gy4:#d1d5db;
+  --gy5:#9ca3af;--gy6:#6b7280;--gy7:#4b5563;--gy8:#374151;--gy9:#111827;
+  --rd:10px;--sd:0 2px 8px rgba(0,0,0,.08);
+  --rec:#ef4444;
+}
+body{font-family:-apple-system,BlinkMacSystem32,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:var(--gy1);color:var(--gy8);font-size:14px;line-height:1.6}
+button{cursor:pointer;font-family:inherit;font-size:13px;border:none;outline:none}
+input,select,textarea{font-family:inherit;font-size:13px;outline:none}
+
+/* ========== LOGIN ========== */
+.login-page{display:flex;min-height:100vh;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%)}
+.login-left{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;color:#fff;padding:40px}
+.login-left h1{font-size:36px;font-weight:700;margin-bottom:8px}
+.login-left .sub{font-size:15px;opacity:.8;margin-bottom:24px}
+.login-left .features{display:flex;flex-direction:column;gap:12px;max-width:340px}
+.feat{display:flex;align-items:center;gap:10px;font-size:14px;opacity:.9}
+.feat-icon{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.login-right{flex:1;display:flex;justify-content:center;align-items:center;padding:40px}
+.login-box{background:#fff;border-radius:16px;padding:40px 36px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-box h2{font-size:22px;margin-bottom:6px}
+.login-box .desc{font-size:13px;color:var(--gy5);margin-bottom:28px}
+.fg{margin-bottom:18px}
+.fg label{display:block;font-size:13px;color:var(--gy6);margin-bottom:5px;font-weight:500}
+.fg input,.fg select{width:100%;height:42px;border:1.5px solid var(--gy3);border-radius:var(--rd);padding:0 14px;font-size:14px;transition:border .2s}
+.fg input:focus{border-color:var(--blue)}
+.login-btn{width:100%;height:44px;background:var(--blue);color:#fff;border-radius:var(--rd);font-size:15px;font-weight:600;margin-top:8px;transition:background .2s}
+.login-btn:hover{background:var(--blued)}
+.login-ver{text-align:center;font-size:11px;color:var(--gy4);margin-top:16px}
+
+/* ========== APP ========== */
+.app{display:none;height:100vh;overflow:hidden}
+.topbar{height:56px;background:#fff;border-bottom:1px solid var(--gy3);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:50}
+.topbar-logo{font-size:17px;font-weight:700;color:var(--blue);white-space:nowrap}
+.topbar-logo small{font-size:11px;color:var(--gy4);font-weight:400;margin-left:4px}
+.topbar-nav{display:flex;gap:4px;margin-left:24px}
+.tab-btn{padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;color:var(--gy6);background:transparent;transition:all .15s}
+.tab-btn:hover{background:var(--gy2)}
+.tab-btn.active{background:var(--bluel);color:var(--blue)}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.topbar-user{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gy7)}
+.topbar-avatar{width:32px;height:32px;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+.topbar-btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:500}
+.topbar-btn.outline{background:transparent;border:1px solid var(--gy3);color:var(--gy6)}
+.topbar-btn.outline:hover{border-color:var(--blue);color:var(--blue)}
+.main-content{height:calc(100vh - 56px);overflow-y:auto;padding:24px}
+.page{display:none}.page.active{display:block}
+
+/* ========== DASHBOARD ========== */
+.dash-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stat-card{background:#fff;border-radius:var(--rd);padding:20px;box-shadow:var(--sd)}
+.stat-label{font-size:12px;color:var(--gy5);margin-bottom:6px}
+.stat-value{font-size:28px;font-weight:700;color:var(--gy9)}
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.dash-card{background:#fff;border-radius:var(--rd);padding:20px;box-shadow:var(--sd)}
+.dash-card h3{font-size:15px;font-weight:600;margin-bottom:16px}
+.quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.qbtn{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 12px;border-radius:var(--rd);background:var(--gy1);border:2px dashed var(--gy3);font-size:13px;color:var(--gy6);transition:all .2s}
+.qbtn:hover{border-color:var(--blue);color:var(--blue);background:var(--bluel)}
+.qbtn .qicon{font-size:28px}
+.qbtn.primary-btn{background:linear-gradient(135deg,var(--blue),var(--blued));color:#fff;border:none;grid-column:span 2;flex-direction:row;justify-content:center;padding:16px;font-size:15px;font-weight:600}
+
+/* ========== RECORD ========== */
+.rec-container{max-width:900px;margin:0 auto}
+.rec-bar{background:#fff;border-radius:var(--rd);padding:16px 20px;box-shadow:var(--sd);display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.rec-bar .ri{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gy6)}
+.rec-bar .ri label{font-weight:500;color:var(--gy7);white-space:nowrap}
+.rec-bar input,.rec-bar select{height:34px;border:1.5px solid var(--gy3);border-radius:6px;padding:0 10px;font-size:13px}
+.rec-main{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.rec-box{background:#fff;border-radius:var(--rd);padding:20px;box-shadow:var(--sd);display:flex;flex-direction:column}
+.rec-box h3{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.rec-status{display:flex;align-items:center;gap:8px;padding:10px 0;font-size:13px;color:var(--gy6)}
+.rec-dot{width:10px;height:10px;border-radius:50%;background:var(--gy4)}
+.rec-dot.recording{background:var(--rec);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.rec-textarea{flex:1;min-height:200px;border:1.5px solid var(--gy3);border-radius:var(--rd);padding:12px;font-size:13px;resize:vertical;font-family:inherit;line-height:1.8}
+.rec-textarea:focus{border-color:var(--blue)}
+.rec-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.btn{padding:8px 18px;border-radius:6px;font-size:13px;font-weight:500;transition:all .15s}
+.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:var(--blued)}
+.btn-success{background:var(--green);color:#fff}.btn-success:hover{background:#15803d}
+.btn-danger{background:var(--red);color:#fff}.btn-danger:hover{background:#b91c1c}
+.btn-outline{background:transparent;border:1px solid var(--gy3);color:var(--gy6)}.btn-outline:hover{border-color:var(--blue);color:var(--blue)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.rec-wave{height:48px;background:var(--gy1);border-radius:var(--rd);margin:8px 0;display:flex;align-items:center;justify-content:center;color:var(--gy4);font-size:12px}
+
+/* ========== LEARN ========== */
+.learn-container{max-width:900px;margin:0 auto}
+.learn-bar{background:#fff;border-radius:var(--rd);padding:16px 20px;box-shadow:var(--sd);display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.learn-pause{display:none}.learn-pause.show{display:inline-flex}
+.learn-main{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.learn-box{background:#fff;border-radius:var(--rd);padding:20px;box-shadow:var(--sd)}
+
+/* ========== HISTORY ========== */
+.hist-container{max-width:1000px;margin:0 auto}
+.hist-table{width:100%;border-collapse:collapse;background:#fff;border-radius:var(--rd);overflow:hidden;box-shadow:var(--sd)}
+.hist-table th{background:var(--gy2);padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--gy6);border-bottom:1px solid var(--gy3)}
+.hist-table td{padding:10px 14px;font-size:13px;border-bottom:1px solid var(--gy2)}
+.hist-table tr:hover{background:var(--gy1)}
+.hist-empty{text-align:center;padding:40px;color:var(--gy4);font-size:13px}
+
+/* ========== HISTORY MODAL ========== */
+.hist-modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s}
+.hist-modal{background:#fff;border-radius:12px;width:90%;max-width:800px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.hist-modal-header{padding:16px 24px;border-bottom:1px solid var(--gy3);display:flex;align-items:center;justify-content:space-between}
+.hist-modal-header h3{font-size:16px;font-weight:700}
+.hist-modal-meta{display:flex;gap:16px;font-size:13px;color:var(--gy6)}
+.hist-modal-body{flex:1;overflow-y:auto;padding:20px 24px}
+.hist-section{margin-bottom:20px}
+.hist-section:last-child{margin-bottom:0}
+.hist-section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.hist-section-header h4{font-size:15px;font-weight:600}
+.hist-section-content{background:var(--gy1);border-radius:8px;padding:16px;font-size:14px;line-height:1.9;white-space:pre-wrap;max-height:400px;overflow-y:auto;border:1px solid var(--gy3);-webkit-user-select:text;user-select:text}
+.hist-modal-close{background:transparent;border:none;font-size:20px;color:var(--gy5);cursor:pointer;padding:4px 8px;border-radius:6px;transition:all .15s}
+.hist-audio-player{display:flex;align-items:center;padding:10px 20px;background:var(--gy1);border-bottom:1px solid var(--gy2);gap:8px}
+.hist-modal-close:hover{background:var(--gy2);color:var(--gy8)}
+.hist-editable-name{cursor:default}
+.hist-edit-name-btn{background:transparent;border:none;font-size:14px;cursor:pointer;padding:2px 6px;border-radius:4px;opacity:.5;transition:all .15s;vertical-align:middle;margin-left:4px}
+.hist-edit-name-btn:hover{opacity:1;background:var(--gy2)}
+.hist-name-input{font-size:16px;font-weight:700;border:2px solid var(--bl);border-radius:6px;padding:4px 8px;width:180px;outline:none;font-family:inherit;color:var(--gy9)}
+.hist-name-input:focus{border-color:var(--bl)}
+
+/* ========== PLAN ========== */
+.plan-container{max-width:900px;margin:0 auto}
+.plan-upload{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.plan-drop{background:#fff;border:2px dashed var(--gy3);border-radius:var(--rd);padding:32px;text-align:center;cursor:pointer;transition:all .2s}
+.plan-drop:hover{border-color:var(--blue);background:var(--bluel)}
+.plan-drop .drop-icon{font-size:40px;margin-bottom:8px}
+.plan-drop .drop-text{font-size:13px;color:var(--gy5)}
+.plan-result{background:#fff;border-radius:var(--rd);padding:24px;box-shadow:var(--sd);margin-top:16px}
+.plan-section{margin-bottom:20px}.plan-section:last-child{margin-bottom:0}
+.plan-section h4{font-size:14px;font-weight:600;margin-bottom:10px;color:var(--gy8)}
+.plan-a{color:var(--green)}.plan-b{color:var(--blue)}
+.plan-table{width:100%;border-collapse:collapse;font-size:13px}
+.plan-table th,.plan-table td{padding:8px 12px;border:1px solid var(--gy3)}
+.plan-table th{background:var(--gy2);font-weight:600}
+
+/* ========== PLAN TABS (医生版/患者版/病历) ========== */
+.plan-tabs{display:flex;gap:0;border-bottom:2px solid var(--gy3);margin-bottom:20px}
+.plan-tab{padding:10px 20px;font-size:14px;font-weight:500;border:none;background:transparent;color:var(--gy6);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+.plan-tab:hover{color:var(--gy8)}
+.plan-tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:600}
+.plan-tab-panel{display:none}
+.plan-tab-panel.active{display:block}
+.plan-md-body{padding:16px 20px;font-size:14px;line-height:1.9;max-height:600px;overflow-y:auto;background:var(--gy1);border-radius:8px}
+.plan-md-body h3{font-size:18px !important}.plan-md-body h4{font-size:16px !important}.plan-md-body h5{font-size:15px !important}
+.plan-md-body table{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0}
+.plan-md-body table th{background:var(--gy2);font-weight:600}
+.plan-md-body table td,.plan-md-body table th{border:1px solid var(--gy3);padding:8px 12px;text-align:left}
+.plan-md-body ul,.plan-md-body ol{margin:8px 0;padding-left:20px}
+.plan-md-body li{margin:3px 0;line-height:1.8}
+.plan-md-body hr{border:none;border-top:1px solid var(--gy3);margin:16px 0}
+
+/* ========== PATIENT PLAN (卡片式布局·易读设计) ========== */
+.patient-plan{padding:0;max-width:720px;margin:0 auto}
+/* 顶部摘要卡 */
+.patient-hero{text-align:center;padding:28px 20px;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;border-radius:12px;margin-bottom:16px}
+.patient-hero h2{font-size:20px;font-weight:700;margin:0 0 4px}
+.patient-hero .sub{font-size:13px;opacity:.85}
+/* 三个关键数字 */
+.patient-kpi{display:flex;gap:10px;margin-bottom:16px}
+.patient-kpi-item{flex:1;background:#fff;border-radius:10px;padding:14px 10px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.patient-kpi-item .kpi-num{font-size:26px;font-weight:800;color:var(--blue);line-height:1.2}
+.patient-kpi-item .kpi-label{font-size:11px;color:var(--gy5);margin-top:2px}
+/* 卡片块 */
+.patient-card{background:#fff;border-radius:12px;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.patient-card-title{display:flex;align-items:center;gap:10px;padding:14px 18px;font-size:15px;font-weight:700}
+.patient-card-body{padding:14px 18px 18px;font-size:15px;line-height:1.85;color:var(--gy8)}
+.patient-card-body p{margin:0 0 10px}.patient-card-body p:last-child{margin:0}
+/* 卡片色系 */
+.pc-problem .patient-card-title{background:#fef2f2;color:#991b1b}
+.pc-problem .patient-card-body{color:#7f1d1d}
+.pc-solution .patient-card-title{background:#eff6ff;color:#1e40af}
+.pc-solution .patient-card-body{color:#1e3a5f}
+.pc-timeline .patient-card-title{background:#f0fdf4;color:#166534}
+.pc-timeline .patient-card-body{color:#14532d}
+.pc-cost .patient-card-title{background:#fffbeb;color:#92400e}
+.pc-cost .patient-card-body{color:#78350f}
+.pc-usp .patient-card-title{background:#faf5ff;color:#6b21a8}
+.pc-usp .patient-card-body{color:#4c1d95}
+/* CTA */
+.patient-cta{text-align:center;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;padding:22px 20px;border-radius:10px;margin-top:12px;box-shadow:0 2px 8px rgba(30,64,175,.25)}
+.patient-cta .cta-phone{font-size:26px;font-weight:800;letter-spacing:1px}
+.patient-cta .cta-note{font-size:12px;opacity:.8;margin-top:4px}
+/* Tooth diagram SVG */
+.tooth-diagram{padding:12px 12px 4px;text-align:center;overflow-x:auto}
+.tooth-diagram svg{max-width:100%}
+.tooth-tip{font-size:11px;color:var(--gy5);text-align:center;margin-top:4px}
+/* Timeline stepper */
+.patient-steps{display:flex;flex-direction:column;gap:10px}
+.patient-step{display:flex;align-items:flex-start;gap:12px}
+.patient-step-num{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+.patient-step-info{flex:1;min-width:0}
+.patient-step-info .step-title{font-weight:600;font-size:14px;color:var(--gy8);margin-bottom:2px}
+.patient-step-info .step-desc{font-size:12px;color:var(--gy5);line-height:1.5}
+/* 费用表格 */
+.patient-fee-table{width:100%;font-size:13px;border-collapse:collapse}
+.patient-fee-table td{padding:6px 0;border-bottom:1px solid #f3f4f6;vertical-align:top;line-height:1.6}
+.patient-fee-table tr:last-child td{border-bottom:2px solid var(--amber);font-weight:700;color:#991b1b}
+/* 打印窗口样式（精简版） */
+.print-frame .patient-hero{border-radius:0;margin:0}
+.print-frame .patient-kpi-item{box-shadow:none;border:1px solid #e5e7eb}
+.print-frame .patient-card{box-shadow:none;border:1px solid #e5e7eb}
+@media print{.patient-plan{max-width:100%}}
+/* Timeline */
+.patient-timeline{position:relative;padding-left:28px}
+.patient-timeline::before{content:'';position:absolute;left:8px;top:4px;bottom:4px;width:3px;background:var(--gy3);border-radius:2px}
+.tl-step{position:relative;margin-bottom:18px;font-size:15px;line-height:1.6}
+.tl-step::before{content:'';position:absolute;left:-24px;top:6px;width:14px;height:14px;border-radius:50%;background:var(--green);border:3px solid #dcfce7}
+.tl-step:last-child{margin-bottom:0}
+.tl-label{font-weight:700;color:var(--green);margin-right:8px}
+/* Cost table */
+.patient-cost{width:100%;border-collapse:collapse;font-size:14px}
+.patient-cost td{padding:10px 14px;border-bottom:1px solid var(--gy2)}
+.patient-cost tr:last-child td{border-bottom:none;font-weight:700;font-size:16px;color:#991b1b}
+.patient-cost .cost-label{color:var(--gy6)}
+.patient-cost .cost-val{text-align:right;font-weight:600}
+/* PDF button */
+.btn-pdf{background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;display:inline-flex;align-items:center;gap:8px;border:none;cursor:pointer;transition:all .2s}
+.btn-pdf:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(220,38,38,.3)}
+.btn-copy{background:var(--blue);color:#fff;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-copy:hover{background:var(--blued)}
+.plan-actions{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+@media print{body>*:not(.print-area){display:none}}}
+
+/* ========== SETTINGS ========== */
+.set-container{max-width:700px;margin:0 auto}
+.set-card{background:#fff;border-radius:var(--rd);padding:24px;box-shadow:var(--sd);margin-bottom:16px}
+.set-card h3{font-size:15px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.sg{margin-bottom:14px}.sg:last-child{margin-bottom:0}
+.sg-label{font-size:13px;font-weight:500;color:var(--gy7);margin-bottom:4px}
+.sg-desc{font-size:12px;color:var(--gy5);margin-bottom:6px}
+.sg input,.sg select,.sg textarea{width:100%;height:38px;border:1.5px solid var(--gy3);border-radius:6px;padding:0 12px;font-size:13px}
+.sg textarea{height:80px;padding:10px 12px;resize:vertical;font-family:inherit}
+.save-btn{background:var(--blue);color:#fff;padding:8px 20px;border-radius:6px;font-weight:500}
+.save-btn:hover{background:var(--blued)}
+.test-btn{background:transparent;border:1px solid var(--gy3);color:var(--gy6);padding:8px 20px;border-radius:6px;font-weight:500;margin-left:8px}
+.test-btn:hover{border-color:var(--blue);color:var(--blue)}
+.reset-btn{background:var(--red);color:#fff;padding:8px 20px;border-radius:6px;font-weight:500;margin-top:12px}
+.reset-btn:hover{background:#b91c1c}
+.btn-pause{background:var(--yellow);color:#fff}.btn-pause:hover{background:#d97706}
+.btn-next{background:var(--green);color:#fff;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600}.btn-next:hover{background:#15803d}
+.btn-next:disabled{opacity:.5;cursor:not-allowed}
+.rec-live{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;animation:fadeIn .3s}
+.rec-live.on{background:#dcfce7;color:#166534}
+.rec-live.off{background:var(--gy2);color:var(--gy5)}
+.rec-live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1s infinite;display:inline-block}
+.processing-bar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--bluel);border-radius:var(--rd);margin-top:12px;font-size:13px;color:var(--blue)}
+.processing-spinner{width:18px;height:18px;border:2.5px solid var(--gy3);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.status-ok{color:var(--green);font-size:13px;margin-top:8px}
+.status-err{color:var(--red);font-size:13px;margin-top:8px}
+
+/* ========== TOAST ========== */
+.toast-container{position:fixed;top:70px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.12);animation:slideIn .2s ease}
+.toast-success{background:#dcfce7;color:#166534;border:1px solid #86efac}
+.toast-error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+.toast-info{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+/* ========== RESPONSIVE ========== */
+@media(max-width:768px){
+  .dash-stats{grid-template-columns:1fr 1fr}
+  .dash-grid{grid-template-columns:1fr}
+  .rec-main{grid-template-columns:1fr}
+  .learn-main{grid-template-columns:1fr}
+  .plan-upload{grid-template-columns:1fr}
+  .topbar-nav{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ========== LOGIN ========== -->
+<div class="login-page" id="loginPage">
+  <div class="login-left">
+    <h1>🦷 德仁口腔</h1>
+    <div class="sub">AI 病历助手 v2</div>
+    <div class="features">
+      <div class="feat"><div class="feat-icon">🎙️</div><div>语音录音 → AI 自动生成规范病历</div></div>
+      <div class="feat"><div class="feat-icon">📸</div><div>上传CT/X光片 → AI 生成治疗方案</div></div>
+      <div class="feat"><div class="feat-icon">📚</div><div>学习录音 → 提升接诊沟通技巧</div></div>
+      <div class="feat"><div class="feat-icon">📋</div><div>一键复制粘贴到 E看牙系统</div></div>
+    </div>
+  </div>
+  <div class="login-right">
+    <div class="login-box">
+      <h2>欢迎使用</h2>
+      <div class="desc">请输入诊所和医生信息开始使用</div>
+      <div class="fg">
+        <label>诊所名称</label>
+        <input type="text" id="loginClinic" value="烟台德仁口腔医院" placeholder="诊所名称">
+      </div>
+      <div class="fg">
+        <label>医生姓名</label>
+        <input type="text" id="loginDoctor" value="马医生" placeholder="医生姓名">
+      </div>
+      <button class="login-btn" id="loginBtn" onclick="doLogin()">进入系统</button>
+      <div class="login-ver">v2 · 纯前端 + 最小化服务端</div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== APP ========== -->
+<div class="app" id="app">
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-logo">🦷 德仁口腔 AI 助手<small>v2</small></div>
+    <div class="topbar-nav">
+      <button class="tab-btn active" data-tab="dash" onclick="switchTab('dash',this)">📊 看板</button>
+      <button class="tab-btn" data-tab="record" onclick="switchTab('record',this)">🎙️ 录音写病历</button>
+      <button class="tab-btn" data-tab="learn" onclick="switchTab('learn',this)">📚 学习录音</button>
+      <button class="tab-btn" data-tab="history" onclick="switchTab('history',this)">📋 历史记录</button>
+      <button class="tab-btn" data-tab="plan" onclick="switchTab('plan',this)">📸 治疗方案</button>
+      <button class="tab-btn" data-tab="settings" onclick="switchTab('settings',this)">⚙️ 设置</button>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <div class="topbar-avatar" id="topAvatar">赵</div>
+        <span id="topUserName">赵医生</span>
+      </div>
+      <button class="topbar-btn outline" onclick="doLogout()">退出</button>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dash">
+      <div class="dash-stats">
+        <div class="stat-card"><div class="stat-label">今日患者</div><div class="stat-value" id="statPatients">0</div></div>
+        <div class="stat-card"><div class="stat-label">今日病历</div><div class="stat-value" id="statRecords">0</div></div>
+        <div class="stat-card"><div class="stat-label">活跃时长</div><div class="stat-value" id="statTime">0h</div></div>
+        <div class="stat-card"><div class="stat-label">累计录音</div><div class="stat-value" id="statAudio">0</div></div>
+      </div>
+      <div class="dash-grid">
+        <div class="dash-card">
+          <h3>⚡ 快捷操作</h3>
+          <div class="quick-actions">
+            <button class="qbtn" onclick="switchTab('record')"><div class="qicon">🎙️</div>开始录音写病历</button>
+            <button class="qbtn" onclick="switchTab('learn')"><div class="qicon">📚</div>录制学习录音</button>
+            <button class="qbtn" onclick="switchTab('plan')"><div class="qicon">📸</div>生成治疗方案</button>
+            <button class="qbtn" onclick="switchTab('history')"><div class="qicon">📋</div>查看历史记录</button>
+            <button class="qbtn primary-btn" onclick="switchTab('record')"><div class="qicon">🚀</div>开始今日工作</button>
+          </div>
+        </div>
+        <div class="dash-card">
+          <h3>📈 使用提示</h3>
+          <div style="font-size:13px;color:var(--gy6);line-height:2">
+            <div>✅ 首次使用请先前往 <strong>设置</strong> 填写 API Key</div>
+            <div>✅ 录音写病历：录音 → 转写 → AI生成 → 复制粘贴</div>
+            <div>✅ 治疗方案：上传影像 → AI分析 → 导出PDF给患者</div>
+            <div>✅ 学习录音：录制沟通话术 → 回放提升</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECORD -->
+    <div class="page" id="page-record">
+      <div class="rec-container">
+        <div class="rec-bar">
+          <div class="ri"><label>患者：</label><input type="text" id="recPatient" placeholder="患者姓名" style="width:100px"></div>
+          <div class="ri"><label>类型：</label>
+            <select id="recType" style="width:120px">
+              <option value="general">常规</option>
+              <option value="implant">种植</option>
+              <option value="ortho">正畸</option>
+              <option value="pediatric">儿牙</option>
+              <option value="restore">修复</option>
+            </select>
+          </div>
+          <div class="ri" id="recTimeLabel"><label>时长：</label><span id="recTimer">00:00</span></div>
+          <div class="ri" id="recSizeLabel" style="display:none"><label>大小：</label><span id="recSize">0 MB</span></div>
+          <button class="btn btn-outline" id="importToggleBtn" onclick="toggleImportPanel()" style="margin-left:auto">✖ 关闭导入</button>
+        </div>
+        <!-- 录音文件导入面板 -->
+        <div id="importPanel" style="display:block;background:#fff;border-radius:var(--rd);box-shadow:var(--sd);padding:16px 20px;margin-bottom:16px">
+          <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">📂 导入录音文件（支持 mp3/m4a/wav/webm 等格式）</h3>
+          <div id="importDropZone" style="border:2px dashed var(--gy3);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px"
+               ondragover="event.preventDefault();this.style.borderColor='var(--blue)';this.style.background='var(--bluel)'"
+               ondragleave="this.style.borderColor='var(--gy3)';this.style.background='transparent'"
+               ondrop="event.preventDefault();this.style.borderColor='var(--gy3)';this.style.background='transparent';handleImportDrop(event)"
+               onclick="document.getElementById('importFileInput').click()">
+            <div style="font-size:36px;margin-bottom:8px">🎵</div>
+            <div style="font-size:13px;color:var(--gy6)">拖拽音频文件到此处，或 <span style="color:var(--blue);text-decoration:underline">点击选择文件</span></div>
+            <div style="font-size:11px;color:var(--gy5);margin-top:4px">支持多选 · mp3 / m4a / wav / webm / ogg / flac</div>
+            <input type="file" id="importFileInput" accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg,.flac,.aac,.wma" multiple hidden onchange="handleImportFiles(this.files)">
+          </div>
+          <div id="importFileList" style="display:none;margin-bottom:12px">
+            <div style="font-size:13px;font-weight:600;color:var(--gy7);margin-bottom:8px">待处理文件列表</div>
+            <div id="importFileItems"></div>
+          </div>
+          <div id="importProgressArea" style="display:none;margin-bottom:12px">
+            <div style="font-size:13px;font-weight:600;color:var(--gy7);margin-bottom:8px">处理进度</div>
+            <div id="importProgressBar" style="height:8px;background:var(--gy2);border-radius:4px;overflow:hidden;margin-bottom:6px">
+              <div id="importProgressFill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--blue),#06b6d4);border-radius:4px;transition:width .3s"></div>
+            </div>
+            <div style="font-size:12px;color:var(--gy6)"><span id="importProgressText">准备中...</span> · 当前：<span id="importCurrentFile">-</span> · 进度：<span id="importChunkText">-</span></div>
+          </div>
+          <div class="rec-actions">
+            <button class="btn btn-primary" id="importStartBtn" onclick="startImport()" disabled>▶️ 开始处理</button>
+            <button class="btn btn-danger" id="importCancelBtn" onclick="cancelImport()" style="display:none">⏹ 取消</button>
+          </div>
+        </div>
+        <div class="rec-main">
+          <!-- Left: Recording -->
+          <div class="rec-box">
+            <h3>🎙️ 录音</h3>
+            <div class="rec-status">
+              <div class="rec-dot" id="recDot"></div>
+              <span id="recStatusText">准备就绪</span>
+              <span class="rec-live off" id="recLiveBadge"><span class="rec-live-dot"></span>实时转写</span>
+            </div>
+            <div class="rec-wave" id="recWave">点击开始录音</div>
+            <div class="rec-actions">
+              <button class="btn btn-primary" id="recBtn" onclick="toggleRecording()">🔴 开始录音</button>
+              <button class="btn btn-pause" id="recPauseBtn" onclick="togglePause()" style="display:none">⏸ 暂停</button>
+              <button class="btn btn-danger" id="recStopBtn" onclick="stopRecording()" disabled>⏹ 结束录音</button>
+              <button class="btn btn-next" id="nextPatientBtn" onclick="nextPatient()" style="display:none">👤 下一个患者</button>
+            </div>
+            <div style="margin-top:8px;font-size:11px;color:var(--gy5)">💡 边说边实时转写 · 结束录音后AI自动后台生成</div>
+            <!-- Processing indicator -->
+            <div class="processing-bar" id="processingBar" style="display:none">
+              <div class="processing-spinner"></div>
+              <span id="processingText">AI 正在后台生成病历+患者画像...</span>
+            </div>
+            <!-- Debug -->
+            <div id="debugLog" style="margin-top:12px;font-size:11px;font-family:Consolas,monospace;max-height:120px;overflow-y:auto;background:#1a1a2e;color:#0f0;padding:8px;border-radius:4px;display:none"></div>
+          </div>
+          <!-- Right: Transcript + Record -->
+          <div class="rec-box">
+            <h3>📝 实时转写</h3>
+            <textarea class="rec-textarea" id="recText" placeholder="开始录音后，文字将实时显示在这里..." readonly></textarea>
+            <div class="rec-actions">
+              <button class="btn btn-primary" id="genBtn" onclick="generateRecord()" disabled>✨ AI生成病历</button>
+              <button class="btn btn-outline" onclick="copyRecord()" disabled id="copyBtn">📋 复制病历</button>
+            </div>
+          </div>
+        </div>
+        <!-- Generated Record -->
+        <div class="rec-box" id="recordResult" style="display:none;margin-top:16px">
+          <h3>📋 生成的病历</h3>
+          <div id="recordContent" style="font-size:13px;line-height:1.8;white-space:pre-wrap;background:var(--gy1);padding:16px;border-radius:var(--rd)"></div>
+          <div class="rec-actions">
+            <button class="btn btn-primary" onclick="copyRecord()">📋 复制病历</button>
+            <button class="btn btn-outline" onclick="exportRecordPDF()">📄 导出PDF</button>
+            <button class="btn btn-outline" onclick="saveRecord()">💾 保存记录</button>
+          </div>
+        </div>
+        <!-- Communication Analysis -->
+        <div class="rec-box" id="analysisResult" style="display:none;margin-top:16px">
+          <h3>🗣️ 沟通分析</h3>
+          <div id="analysisContent" style="font-size:13px;line-height:1.8;white-space:pre-wrap;background:var(--gy1);padding:16px;border-radius:var(--rd)"></div>
+        </div>
+        <!-- Patient Profile -->
+        <div class="rec-box" id="profileResult" style="display:none;margin-top:16px">
+          <h3>👤 患者画像</h3>
+          <div id="profileContent" style="font-size:13px;line-height:1.8;white-space:pre-wrap;background:var(--gy1);padding:16px;border-radius:var(--rd)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LEARN -->
+    <div class="page" id="page-learn">
+      <div class="learn-container">
+        <div class="learn-bar">
+          <div class="ri"><label>主题：</label><input type="text" id="learnTopic" placeholder="沟通话术/开场白" style="width:160px"></div>
+          <div class="ri" id="learnTimeLabel"><label>时长：</label><span id="learnTimer">00:00</span></div>
+          <button class="btn btn-primary" id="learnBtn" onclick="toggleLearn()">🔴 开始学习录音</button>
+          <button class="btn btn-danger" id="learnStopBtn" onclick="stopLearn()" disabled>⏹ 停止</button>
+          <button class="btn btn-outline learn-pause" id="learnPauseBtn" onclick="toggleLearnPause()">⏸ 暂停</button>
+        </div>
+        <div class="learn-main">
+          <div class="learn-box">
+            <h3>📝 转写文本</h3>
+            <textarea class="rec-textarea" id="learnText" placeholder="录音转写结果将显示在这里..."></textarea>
+          </div>
+          <div class="learn-box">
+            <h3>🤖 AI 总结</h3>
+            <textarea class="rec-textarea" id="learnSummary" placeholder="AI 总结将显示在这里..."></textarea>
+            <div style="margin-top:8px;display:flex;gap:8px">
+              <button class="btn btn-outline" onclick="saveLearnRecord()">💾 保存学习记录</button>
+              <button class="btn btn-outline" onclick="copyLearnSummary()">📋 复制总结</button>
+            </div>
+            <div style="margin-top:8px;font-size:12px;color:var(--gy5)" id="learnStatus">准备就绪</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="page" id="page-history">
+      <div class="hist-container">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">📋 历史记录</h3>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="btn btn-outline" onclick="filterHistory('all')" id="hfAll">全部</button>
+          <button class="btn btn-outline" onclick="filterHistory('record')" id="hfRecord">病历</button>
+          <button class="btn btn-outline" onclick="filterHistory('learn')" id="hfLearn">学习</button>
+          <button class="btn btn-outline" onclick="filterHistory('plan')" id="hfPlan">方案</button>
+        </div>
+        <table class="hist-table">
+          <thead><tr><th>时间</th><th>类型</th><th>患者/主题</th><th>时长</th><th>操作</th></tr></thead>
+          <tbody id="histBody"></tbody>
+        </table>
+        <div class="hist-empty" id="histEmpty">暂无记录，开始录音吧</div>
+      </div>
+    </div>
+
+    <!-- PLAN -->
+    <div class="page" id="page-plan">
+      <div class="plan-container">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">📸 AI 治疗方案生成</h3>
+        <div class="rec-bar" style="margin-bottom:16px">
+          <div class="ri"><label>患者：</label><input type="text" id="planPatient" placeholder="患者姓名" style="width:120px"></div>
+        </div>
+        <div class="plan-upload">
+          <div class="plan-drop" id="planDrop1" onclick="document.getElementById('planFile1').click()"
+               ondragover="event.preventDefault();this.style.borderColor='var(--blue)';this.style.background='var(--bluel)'"
+               ondragleave="this.style.borderColor='';this.style.background=''"
+               ondrop="event.preventDefault();this.style.borderColor='';this.style.background='';handlePlanDrop(event.dataTransfer.files,1)">
+            <div class="drop-icon">🩻</div>
+            <div class="drop-text">点击或拖拽上传影像资料<br>CT / X光片 / 口内照片（最多4张）</div>
+            <input type="file" id="planFile1" accept="image/*" multiple hidden onchange="handlePlanFiles(this,1)">
+          </div>
+          <div class="plan-drop" id="planDrop2" onclick="document.getElementById('planFile2').click()"
+               ondragover="event.preventDefault();this.style.borderColor='var(--blue)';this.style.background='var(--bluel)'"
+               ondragleave="this.style.borderColor='';this.style.background=''"
+               ondrop="event.preventDefault();this.style.borderColor='';this.style.background='';handlePlanDrop(event.dataTransfer.files,2)">
+            <div class="drop-icon">📋</div>
+            <div class="drop-text">点击或拖拽上传病历截图<br>E看牙系统截图（最多2张）</div>
+            <input type="file" id="planFile2" accept="image/*" multiple hidden onchange="handlePlanFiles(this,2)">
+          </div>
+        </div>
+        <div id="planPreviews" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+        <div class="sg">
+          <div class="sg-label">补充文字（可选）</div>
+          <textarea class="rec-textarea" id="planNotes" placeholder="额外补充的患者情况或需求..." style="min-height:80px"></textarea>
+        </div>
+        <div class="rec-actions" style="margin-top:12px">
+          <button class="btn btn-primary" id="planGenBtn" onclick="generatePlan()">✨ 生成治疗方案</button>
+        </div>
+        <div class="plan-result" id="planResult" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <div class="set-container">
+        <div class="set-card">
+          <h3>💬 AI 接口（病历生成）</h3>
+          <div class="sg">
+            <div class="sg-label">API 地址</div>
+            <div class="sg-desc">DeepSeek API，用于病历文字生成</div>
+            <input type="text" id="setApiUrl" value="https://api.deepseek.com/v1/chat/completions">
+          </div>
+          <div class="sg">
+            <div class="sg-label">API Key</div>
+            <div class="sg-desc">DeepSeek API Key（sk- 开头）</div>
+            <input type="password" id="setApiKey" placeholder="sk-...">
+          </div>
+          <div class="sg">
+            <div class="sg-label">模型名称</div>
+            <input type="text" id="setModel" value="deepseek-chat">
+          </div>
+          <button class="save-btn" onclick="saveAISettings()">保存设置</button>
+          <button class="test-btn" onclick="testAIAPI()">测试连接</button>
+          <div id="aiTestResult"></div>
+        </div>
+
+        <div class="set-card">
+          <h3>👁️ 视觉模型（治疗方案）</h3>
+          <div class="sg">
+            <div class="sg-label">API 地址</div>
+            <div class="sg-desc">阿里云百炼 OpenAI 兼容接口，用于识别CT/X光片</div>
+            <input type="text" id="setVisionUrl" value="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions">
+          </div>
+          <div class="sg">
+            <div class="sg-label">API Key</div>
+            <div class="sg-desc">阿里云百炼 API Key（sk- 开头），<a href="https://bailian.console.aliyun.com" target="_blank">获取Key</a></div>
+            <input type="password" id="setVisionKey" placeholder="sk-...">
+          </div>
+          <div class="sg">
+            <div class="sg-label">模型名称</div>
+            <div class="sg-desc">推荐 qwen3-vl-plus</div>
+            <input type="text" id="setVisionModel" value="qwen3-vl-plus">
+          </div>
+          <button class="save-btn" onclick="saveVisionSettings()">保存设置</button>
+          <button class="test-btn" onclick="testVisionAPI()">测试连接</button>
+          <div id="visionTestResult"></div>
+        </div>
+
+        <div class="set-card">
+          <h3>🎙️ 语音转写（STT）</h3>
+          <div class="sg">
+            <div class="sg-label">API Key</div>
+            <div class="sg-desc">留空则自动使用上方视觉模型的 API Key（百炼统一密钥）</div>
+            <input type="password" id="setSttKey" placeholder="留空自动使用视觉模型Key">
+          </div>
+          <button class="save-btn" onclick="saveSttSettings()">保存设置</button>
+        </div>
+
+        <div class="set-card">
+          <h3>🏥 诊所信息</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="sg"><div class="sg-label">诊所名称</div><input type="text" id="setClinicName"></div>
+            <div class="sg"><div class="sg-label">医生姓名</div><input type="text" id="setDoctorName"></div>
+            <div class="sg"><div class="sg-label">联系电话</div><input type="text" id="setClinicPhone"></div>
+            <div class="sg"><div class="sg-label">地址</div><input type="text" id="setClinicAddr"></div>
+          </div>
+          <button class="save-btn" onclick="saveClinicSettings()">保存设置</button>
+        </div>
+
+        <div class="set-card" style="border:2px solid var(--red);border-radius:var(--rd)">
+          <h3 style="color:var(--red)">⚠️ 危险操作</h3>
+          <p style="font-size:13px;color:var(--gy6);margin-bottom:12px">
+            清除所有本地数据（设置、历史记录、录音）。此操作不可恢复。
+          </p>
+          <button class="reset-btn" onclick="resetAllData()">🗑️ 清除所有数据并重置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ========== SETTINGS (must be before state) ==========
+const DEFAULT_SETTINGS = {
+  // AI (DeepSeek)
+  apiUrl: 'https://api.deepseek.com/v1/chat/completions',
+  apiKey: '',
+  model: 'deepseek-chat',
+  systemPrompt: `你是一位经验丰富的口腔科医生的AI病历助手。请根据提供的录音转写文本，生成规范的口腔门诊病历。
+
+【重要】输出必须严格按以下E看牙电子病历标准字段格式，每个字段用【字段名】开头，方便医生直接复制粘贴到E看牙对应输入框：
+
+【主诉】
+（症状+部位+时间，如"左下后牙疼痛3天"）
+
+【现病史】
+（疾病发生发展过程、是否有过诊疗、用药情况等）
+
+【既往史】
+（全身病史、药物过敏史、口腔治疗史。如文本中未提及则标注"否认系统性疾病史，否认药物过敏史"）
+
+【口腔检查】
+（口内检查所见，包括牙体、牙周、粘膜、咬合等）
+
+【辅助检查】
+（X光片、CT等检查结果，如无则写"暂无"）
+
+【诊断】
+（明确诊断结论，多个诊断分行列出）
+
+【治疗计划】
+（治疗方案及步骤）
+
+【处置】
+（本次实际执行的操作。如本次未做处置则写"解释病情，择期治疗"）
+
+【医嘱】
+（术后注意事项、复诊时间等）
+
+要求：
+- 语言专业、简洁、规范，符合口腔门诊病历书写规范
+- 每个字段内容要具体，不能只写"正常"或"详见检查"
+- 如转写文本中某项信息不足，根据临床经验合理推断并标注"*推断"
+- 不要输出任何多余的文字说明或开场白
+- 无信息的字段不要编造，直接跳过不输出该字段
+- ⚠️ 第三磨牙（智齿，FDI 18/28/38/48，Palmer 8号牙）拔除后禁止建议种植修复，只写拔除处理`,
+  // Vision (百炼)
+  visionUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+  visionKey: 'sk-912a0619e4df49f5953b335da813717e',
+  visionModel: 'qwen3-vl-plus',
+  // STT
+  sttKey: '',   // 留空则复用 visionKey
+  // 诊所
+  clinicName: '烟台德仁口腔医院',
+  doctorName: '马医生',
+  clinicPhone: '13863829919',
+  clinicAddr: '山东省烟台市芝罘区',
+};
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem('dr_settings_v2');
+    // 保存原始值，防止自动修复逻辑覆写用户填写的 Key
+    let originalApiKey = '';
+    let originalVisionKey = '';
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.apiKey && parsed.apiKey.startsWith('sk-')) originalApiKey = parsed.apiKey;
+        if (parsed.visionKey && parsed.visionKey.startsWith('sk-')) originalVisionKey = parsed.visionKey;
+      } catch(_) {}
+    }
+    if (!raw) return { ...DEFAULT_SETTINGS };
+    const parsed = JSON.parse(raw);
+    const result = { ...DEFAULT_SETTINGS };
+    for (const key of Object.keys(DEFAULT_SETTINGS)) {
+      if (parsed[key] !== undefined) result[key] = parsed[key];
+    }
+    // 自动升级旧版 systemPrompt（缺智齿规则 → 新格式）
+    if (result.systemPrompt && !result.systemPrompt.includes('智齿禁止种植')) {
+      result.systemPrompt = DEFAULT_SETTINGS.systemPrompt;
+    }
+    // ⚠️ 防止自动修复逻辑把用户填写的有效 Key 覆写为空
+    if (originalApiKey && (!result.apiKey || result.apiKey === '')) {
+      result.apiKey = originalApiKey;
+      console.log('[LoadSettings] 恢复用户 DeepSeek API Key');
+    }
+    if (originalVisionKey && (!result.visionKey || result.visionKey === '' || result.visionKey === DEFAULT_SETTINGS.visionKey)) {
+      // 只恢复非默认值的用户自定义 Key
+      if (originalVisionKey !== DEFAULT_SETTINGS.visionKey) {
+        result.visionKey = originalVisionKey;
+        console.log('[LoadSettings] 恢复用户自定义视觉模型 Key');
+      }
+    }
+    return result;
+  } catch (_) {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveSettings() {
+  // ⚠️ 保存前检查：如果 apiKey 为空但 localStorage 里有有效值，保留它
+  try {
+    const raw = localStorage.getItem('dr_settings_v2');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if ((!state.settings.apiKey || state.settings.apiKey === '') &&
+          parsed.apiKey && parsed.apiKey.startsWith('sk-')) {
+        state.settings.apiKey = parsed.apiKey;
+        console.log('[SaveSettings] 阻止空 apiKey 覆盖，已恢复');
+      }
+    }
+  } catch(_) {}
+  localStorage.setItem('dr_settings_v2', JSON.stringify(state.settings));
+}
+
+function getApiKeyForSTT() {
+  if (state.settings.sttKey && state.settings.sttKey.startsWith('sk-')) {
+    return state.settings.sttKey;
+  }
+  if (state.settings.visionKey && state.settings.visionKey.startsWith('sk-')) {
+    return state.settings.visionKey;
+  }
+  return '';
+}
+
+// ========== STATE ==========
+let state;
+try {
+  state = {
+    settings: loadSettings(),
+    currentTab: 'dash',
+    recording: false,
+    recordingPaused: false,
+    learnRecording: false,
+    learnPaused: false,
+    recTimer: null,
+    learnTimer: null,
+    recSeconds: 0,
+    learnSeconds: 0,
+    mediaRecorder: null,
+    learnMediaRecorder: null,
+    audioChunks: [],
+    learnChunks: [],
+    currentRecord: '',
+    currentAnalysis: '',
+    currentProfile: '',
+    planContent: '',
+    planPatient: '',
+    planRecord: '',
+    planAffectedTeeth: [],
+    records: [],
+    // 实时转写
+    sttWs: null,
+    audioCtx: null,
+    streamProcessor: null,
+    micStream: null,
+    processingQueue: [], // 后台处理的病历队列
+    _pauseKeepAlive: null, // 暂停期间心跳定时器
+    lastAudioBlob: null,  // 最近一次录音的 Blob（用于保存到历史）
+    lastLearnAudioBlob: null, // 最近一次学习录音的 Blob
+  };
+  // 自动修复：visionKey 为空或无效时用默认值
+  const defaultVisionKey = 'sk-912a0619e4df49f5953b335da813717e';
+  if (!state.settings.visionKey || !state.settings.visionKey.startsWith('sk-')) {
+    console.log('[DR-AI v2] visionKey 无效，使用默认值');
+    state.settings.visionKey = defaultVisionKey;
+  }
+  // 自动修复：sttKey 不是百炼格式则清空（回退到 visionKey）
+  if (state.settings.sttKey && !state.settings.sttKey.startsWith('sk-')) {
+    console.log('[DR-AI v2] sttKey 格式无效，清空');
+    state.settings.sttKey = '';
+  }
+  // 自动修复：过期视觉模型名
+  if (state.settings.visionModel === 'qwen3-vl-plus-latest' || state.settings.visionModel === 'qwen-vl-max-latest') {
+    state.settings.visionModel = 'qwen3-vl-plus';
+  }
+  saveSettings();
+  console.log('[DR-AI v2] 初始化成功, doctor:', state.settings.doctorName);
+} catch (e) {
+  console.error('[DR-AI v2] 初始化失败:', e);
+  alert('初始化失败，请清除浏览器数据后重试: ' + e.message);
+}
+
+// ========== LOGIN/LOGOUT ==========
+function doLogin() {
+  console.log('[DR-AI v2] doLogin 被调用');
+  const clinic = document.getElementById('loginClinic').value.trim() || '烟台德仁口腔医院';
+  const doctor = document.getElementById('loginDoctor').value.trim() || '马医生';
+  state.settings.clinicName = clinic;
+  state.settings.doctorName = doctor;
+  saveSettings();
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('topAvatar').textContent = doctor.charAt(0);
+  document.getElementById('topUserName').textContent = doctor;
+  try {
+    loadSettingsUI();
+  } catch(e) { console.warn('loadSettingsUI error:', e); }
+  try {
+    loadHistory();
+  } catch(e) { console.warn('loadHistory error:', e); }
+  showToast('欢迎回来，' + doctor, 'success');
+}
+
+// ========== INIT ==========
+document.addEventListener('DOMContentLoaded', () => {
+  // 双重绑定登录按钮（onclick 可能因浏览器策略失效）
+  const loginBtn = document.getElementById('loginBtn');
+  if (loginBtn) {
+    loginBtn.addEventListener('click', function(e) {
+      console.log('[DR-AI v2] 登录按钮被点击 (addEventListener)');
+      doLogin();
+    });
+  }
+  console.log('[DR-AI v2] DOMContentLoaded 完成');
+});
+
+function doLogout() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginPage').style.display = 'flex';
+}
+
+// ========== TABS ==========
+function switchTab(tab, btn) {
+  state.currentTab = tab;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + tab).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (tab === 'history') loadHistory();
+}
+
+// ========== SETTINGS UI ==========
+function loadSettingsUI() {
+  document.getElementById('setApiUrl').value = state.settings.apiUrl || '';
+  document.getElementById('setApiKey').value = state.settings.apiKey || '';
+  document.getElementById('setModel').value = state.settings.model || '';
+  document.getElementById('setVisionUrl').value = state.settings.visionUrl || '';
+  document.getElementById('setVisionKey').value = state.settings.visionKey || '';
+  document.getElementById('setVisionModel').value = state.settings.visionModel || '';
+  document.getElementById('setSttKey').value = state.settings.sttKey || '';
+  document.getElementById('setClinicName').value = state.settings.clinicName || '';
+  document.getElementById('setDoctorName').value = state.settings.doctorName || '';
+  document.getElementById('setClinicPhone').value = state.settings.clinicPhone || '';
+  document.getElementById('setClinicAddr').value = state.settings.clinicAddr || '';
+}
+
+function saveAISettings() {
+  state.settings.apiUrl = document.getElementById('setApiUrl').value.trim();
+  state.settings.apiKey = document.getElementById('setApiKey').value.trim();
+  state.settings.model = document.getElementById('setModel').value.trim();
+  saveSettings();
+  showToast('AI接口设置已保存', 'success');
+}
+
+function saveVisionSettings() {
+  state.settings.visionUrl = document.getElementById('setVisionUrl').value.trim();
+  state.settings.visionKey = document.getElementById('setVisionKey').value.trim();
+  state.settings.visionModel = document.getElementById('setVisionModel').value.trim();
+  saveSettings();
+  showToast('视觉模型设置已保存', 'success');
+}
+
+function saveSttSettings() {
+  state.settings.sttKey = document.getElementById('setSttKey').value.trim();
+  saveSettings();
+  showToast('STT设置已保存', 'success');
+}
+
+function saveClinicSettings() {
+  state.settings.clinicName = document.getElementById('setClinicName').value.trim();
+  state.settings.doctorName = document.getElementById('setDoctorName').value.trim();
+  state.settings.clinicPhone = document.getElementById('setClinicPhone').value.trim();
+  state.settings.clinicAddr = document.getElementById('setClinicAddr').value.trim();
+  saveSettings();
+  showToast('诊所信息已保存', 'success');
+}
+
+async function testAIAPI() {
+  const el = document.getElementById('aiTestResult');
+  el.className = 'status-err'; el.style.display = 'block';
+  el.innerHTML = '🔄 测试中...';
+  const key = document.getElementById('setApiKey').value.trim() || state.settings.apiKey;
+  const url = document.getElementById('setApiUrl').value.trim() || state.settings.apiUrl;
+  if (!key) { el.innerHTML = '❌ 请填写 API Key'; return; }
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({ model: state.settings.model, messages: [{ role: 'user', content: 'OK' }], max_tokens: 5 })
+    });
+    const data = await resp.json();
+    if (data.choices) { el.className = 'status-ok'; el.innerHTML = '✅ 连接成功'; }
+    else { el.innerHTML = '❌ ' + (data.error?.message || '连接失败'); }
+  } catch (e) { el.innerHTML = '❌ ' + e.message; }
+}
+
+async function testVisionAPI() {
+  const el = document.getElementById('visionTestResult');
+  el.className = 'status-err'; el.style.display = 'block';
+  el.innerHTML = '🔄 测试中...';
+  const key = document.getElementById('setVisionKey').value.trim() || state.settings.visionKey;
+  const url = document.getElementById('setVisionUrl').value.trim() || state.settings.visionUrl;
+  if (!key) { el.innerHTML = '❌ 请填写 API Key'; return; }
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({ model: state.settings.visionModel, messages: [{ role: 'user', content: 'OK' }], max_tokens: 5 })
+    });
+    const data = await resp.json();
+    if (data.choices) { el.className = 'status-ok'; el.innerHTML = '✅ 连接成功'; }
+    else { el.innerHTML = '❌ ' + (data.error?.message || '连接失败'); }
+  } catch (e) { el.innerHTML = '❌ ' + e.message; }
+}
+
+function resetAllData() {
+  if (!confirm('确定要清除所有数据吗？\n\n将清除：\n- 所有设置\n- 所有历史记录\n- 所有录音\n\n此操作不可恢复！')) return;
+  localStorage.clear();
+  // 清除 IndexedDB
+  if (window.indexedDB) {
+    indexedDB.deleteDatabase('dr-ai-v2-db');
+  }
+  showToast('所有数据已清除，页面将刷新', 'info');
+  setTimeout(() => location.reload(), 1500);
+}
+
+// ========== 实时STT重连 ==========
+function reconnectSttWs() {
+  // 清理旧连接
+  if (state.sttWs) {
+    try { state.sttWs.close(); } catch (_) {}
+    state.sttWs = null;
+  }
+
+  const apiKey = getApiKeyForSTT();
+  if (!apiKey) return;
+
+  debugLog('🔄 重新连接实时转写...');
+  const ws = new WebSocket('ws://localhost:' + location.port + '/ws/transcribe?key=' + encodeURIComponent(apiKey));
+  state.sttWs = ws;
+
+  ws.onopen = () => {
+    debugLog('✅ 实时转写已重连');
+    document.getElementById('recLiveBadge').className = 'rec-live on';
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'transcript') {
+        updateLiveTranscript(msg.text);
+      } else if (msg.type === 'done') {
+        updateLiveTranscript(msg.text);
+        debugLog('✅ 转写完成(' + msg.text.length + '字)');
+        document.getElementById('recWave').textContent = '✅ 转写完成，AI正在后台生成病历...';
+      } else if (msg.type === 'error') {
+        debugLog('❌ ' + msg.message);
+      }
+    } catch (_) {}
+  };
+
+  ws.onerror = () => {
+    debugLog('⚠️ WebSocket 重连错误');
+    document.getElementById('recLiveBadge').className = 'rec-live off';
+  };
+
+  ws.onclose = (e) => {
+    debugLog('🔌 WebSocket 断开 (code:' + e.code + ')');
+    document.getElementById('recLiveBadge').className = 'rec-live off';
+  };
+}
+
+// ========== 暂停期间心跳保活 ==========
+// DashScope fun-asr-realtime 在 ~20s 无音频输入后会主动断开
+// 暂停期间每 5 秒发静音帧保持连接
+
+function startKeepAlive() {
+  if (state._pauseKeepAlive) return;
+  debugLog('💓 启动暂停保活 (每5秒)');
+  state._pauseKeepAlive = setInterval(() => {
+    const ws = state.sttWs;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      // 160ms 静音 PCM (2560 samples × 2 bytes = 5.12KB)
+      const silencePcm = new Int16Array(2560);
+      ws.send(new Uint8Array(silencePcm.buffer));
+    }
+  }, 5000);
+}
+
+function stopKeepAlive() {
+  if (state._pauseKeepAlive) {
+    clearInterval(state._pauseKeepAlive);
+    state._pauseKeepAlive = null;
+  }
+}
+
+// ========== RECORDING (Real-time WebSocket STT) ==========
+async function toggleRecording() {
+  if (state.recording) return;
+  const apiKey = getApiKeyForSTT();
+  if (!apiKey) {
+    showToast('请先在设置中配置 API Key', 'error');
+    return;
+  }
+  try {
+    // 1. 获取麦克风
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.micStream = stream;
+    state.recording = true;
+    state.recordingPaused = false;
+    state.recSeconds = 0;
+    state.audioChunks = [];
+
+    // 2. 也挂一个 MediaRecorder 作为备份录音
+    try {
+      state.mediaRecorder = new MediaRecorder(stream);
+      state.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) state.audioChunks.push(e.data); };
+      state.mediaRecorder.start(5000); // 5秒分片
+    } catch (_) { /* MediaRecorder 备用，失败不影响 */ }
+
+    // 3. AudioContext + ScriptProcessorNode 实时采集 PCM
+    let audioCtx;
+    try {
+      audioCtx = new AudioContext({ sampleRate: 16000 });
+    } catch (_) {
+      audioCtx = new AudioContext(); // 降级到默认采样率
+    }
+    state.audioCtx = audioCtx;
+    const source = audioCtx.createMediaStreamSource(stream);
+    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    state.streamProcessor = processor;
+
+    // 4. WebSocket 连接服务端
+    const ws = new WebSocket('ws://localhost:' + location.port + '/ws/transcribe?key=' + encodeURIComponent(apiKey));
+    state.sttWs = ws;
+
+    ws.onopen = () => {
+      debugLog('✅ 实时转写已连接');
+      document.getElementById('recLiveBadge').className = 'rec-live on';
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'transcript') {
+          updateLiveTranscript(msg.text);
+        } else if (msg.type === 'done') {
+          updateLiveTranscript(msg.text);
+          debugLog('✅ 转写完成(' + msg.text.length + '字)');
+          document.getElementById('recWave').textContent = '✅ 转写完成，AI正在后台生成病历...';
+        } else if (msg.type === 'error') {
+          debugLog('❌ ' + msg.message);
+        }
+      } catch (_) {}
+    };
+
+    ws.onerror = () => debugLog('⚠️ WebSocket 连接错误');
+    ws.onclose = (e) => {
+      debugLog('🔌 WebSocket 断开 (code:' + e.code + ')');
+      document.getElementById('recLiveBadge').className = 'rec-live off';
+    };
+
+    // 5. PCM 采集 + 发送
+    let resampleBuf = new Float32Array(0);
+    const srcRate = audioCtx.sampleRate;
+    const needResample = srcRate !== 16000;
+
+    processor.onaudioprocess = (e) => {
+      if (state.recordingPaused || !state.recording) return;
+      const input = e.inputBuffer.getChannelData(0);
+
+      let samples;
+      if (needResample) {
+        // 简单降采样：合并 + 按比例取点
+        const combined = new Float32Array(resampleBuf.length + input.length);
+        combined.set(resampleBuf, 0);
+        combined.set(input, resampleBuf.length);
+        const ratio = srcRate / 16000;
+        const outLen = Math.floor(combined.length / ratio);
+        samples = new Float32Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+          samples[i] = combined[Math.floor(i * ratio)];
+        }
+        const remain = combined.length - Math.floor(outLen * ratio);
+        resampleBuf = remain > 0 ? combined.slice(-remain) : new Float32Array(0);
+      } else {
+        samples = input;
+      }
+
+      // Float32 → Int16 PCM
+      const pcm = new Int16Array(samples.length);
+      for (let i = 0; i < samples.length; i++) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+
+      const currentWs = state.sttWs;
+      if (currentWs && currentWs.readyState === WebSocket.OPEN) {
+        currentWs.send(new Uint8Array(pcm.buffer));
+      }
+    };
+
+    source.connect(processor);
+    processor.connect(audioCtx.destination); // 必须连接到输出才能触发回调
+
+    // 6. 更新 UI
+    document.getElementById('recBtn').disabled = true;
+    document.getElementById('recStopBtn').disabled = false;
+    document.getElementById('recPauseBtn').style.display = 'inline-flex';
+    document.getElementById('recPauseBtn').textContent = '⏸ 暂停';
+    document.getElementById('recDot').classList.add('recording');
+    document.getElementById('recStatusText').textContent = '录音中 · 实时转写';
+    document.getElementById('recWave').textContent = '🎙️ 正在实时转写...';
+    document.getElementById('recText').value = '';
+    document.getElementById('debugLog').style.display = 'block';
+    document.getElementById('debugLog').innerHTML = '';
+    document.getElementById('genBtn').disabled = true;
+    document.getElementById('nextPatientBtn').style.display = 'none';
+    document.getElementById('processingBar').style.display = 'none';
+    document.getElementById('recordResult').style.display = 'none';
+    if (document.getElementById('analysisResult')) document.getElementById('analysisResult').style.display = 'none';
+    if (document.getElementById('profileResult')) document.getElementById('profileResult').style.display = 'none';
+    state.recTimer = setInterval(() => {
+      state.recSeconds++;
+      document.getElementById('recTimer').textContent = fmtTime(state.recSeconds);
+    }, 1000);
+    showToast('开始录音（实时转写已启用）', 'info');
+  } catch (e) {
+    showToast('无法访问麦克风: ' + e.message, 'error');
+  }
+}
+
+function togglePause() {
+  if (!state.recording || !state.mediaRecorder) return;
+  if (state.recordingPaused) {
+    // 恢复录音 - 先检查 WebSocket 是否存活
+    if (!state.sttWs || state.sttWs.readyState !== WebSocket.OPEN) {
+      debugLog('⚠️ WebSocket 已断开，重新连接中...');
+      reconnectSttWs();
+    }
+    try { if (state.mediaRecorder.state === 'paused') state.mediaRecorder.resume(); } catch(e) {}
+    state.recordingPaused = false;
+    stopKeepAlive();
+    const btn = document.getElementById('recPauseBtn');
+    btn.textContent = '⏸ 暂停';
+    document.getElementById('recStatusText').textContent = '录音中 · 实时转写';
+    document.getElementById('recDot').classList.add('recording');
+    document.getElementById('recLiveBadge').className = 'rec-live on';
+    showToast('继续录音', 'info');
+    debugLog('▶️ 录音已恢复');
+  } else {
+    // 暂停录音
+    try { if (state.mediaRecorder.state === 'recording') state.mediaRecorder.pause(); } catch(e) {}
+    state.recordingPaused = true;
+    startKeepAlive();
+    const btn = document.getElementById('recPauseBtn');
+    btn.textContent = '▶ 继续';
+    document.getElementById('recStatusText').textContent = '已暂停 · 实时转写';
+    document.getElementById('recDot').classList.remove('recording');
+    document.getElementById('recLiveBadge').className = 'rec-live off';
+    showToast('录音已暂停', 'info');
+    debugLog('⏸ 录音已暂停');
+  }
+}
+
+function stopRecording() {
+  if (!state.recording) return;
+  state.recording = false;
+  state.recordingPaused = false;
+  stopKeepAlive();
+  clearInterval(state.recTimer);
+
+  // 关闭 WebSocket → 触发 server 发送 finish-task
+  if (state.sttWs && state.sttWs.readyState === WebSocket.OPEN) {
+    state.sttWs.close();
+    state.sttWs = null;
+  }
+
+  // 断开 AudioContext
+  if (state.streamProcessor) {
+    state.streamProcessor.disconnect();
+    state.streamProcessor = null;
+  }
+  if (state.audioCtx) {
+    state.audioCtx.close().catch(() => {});
+    state.audioCtx = null;
+  }
+
+  // 停止 MediaRecorder，拿到完整录音 blob 存入 state.lastAudioBlob
+  state.lastAudioBlob = null;
+  if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+    state.mediaRecorder.onstop = () => {
+      if (state.audioChunks && state.audioChunks.length > 0) {
+        state.lastAudioBlob = new Blob(state.audioChunks, { type: 'audio/webm' });
+      }
+    };
+    state.mediaRecorder.stop();
+  }
+
+  // 释放麦克风
+  if (state.micStream) {
+    state.micStream.getTracks().forEach(t => t.stop());
+    state.micStream = null;
+  }
+
+  // UI
+  document.getElementById('recBtn').disabled = false;
+  document.getElementById('recStopBtn').disabled = true;
+  document.getElementById('recPauseBtn').style.display = 'none';
+  document.getElementById('recDot').classList.remove('recording');
+  document.getElementById('recLiveBadge').className = 'rec-live off';
+  document.getElementById('recStatusText').textContent = '处理中...';
+  document.getElementById('recWave').textContent = '⏳ AI 正在后台生成...';
+  document.getElementById('nextPatientBtn').style.display = 'inline-flex';
+  document.getElementById('genBtn').disabled = true; // 阻止手动点击生成
+  document.getElementById('copyBtn').disabled = true;
+
+  // 自动后台生成病历+沟通分析
+  const text = document.getElementById('recText').value.trim();
+  if (text && state.settings.apiKey) {
+    document.getElementById('processingBar').style.display = 'flex';
+    document.getElementById('processingText').textContent = 'AI 正在后台生成病历+沟通分析+患者画像...';
+    backgroundGenerate(text);
+  } else if (!text) {
+    document.getElementById('recStatusText').textContent = '转写为空';
+    document.getElementById('recWave').textContent = '⚠️ 未检测到语音，请重试';
+    document.getElementById('processingBar').style.display = 'none';
+  } else {
+    document.getElementById('recStatusText').textContent = '请配置 AI API Key';
+    document.getElementById('processingBar').style.display = 'none';
+  }
+}
+
+function updateLiveTranscript(text) {
+  const el = document.getElementById('recText');
+  el.value = text;
+  el.scrollTop = el.scrollHeight; // 自动滚到底部
+  document.getElementById('recStatusText').textContent = '录音中 · 实时转写';
+}
+
+// 后台生成病历+沟通分析（不阻塞 UI）
+async function backgroundGenerate(text) {
+  const key = state.settings.apiKey;
+  if (!key) {
+    document.getElementById('processingBar').style.display = 'none';
+    return;
+  }
+
+  const patientName = document.getElementById('recPatient').value.trim() || '未命名';
+  const recordType = document.getElementById('recType').value;
+
+  try {
+    const controller1 = new AbortController();
+    const controller2 = new AbortController();
+    const controller3 = new AbortController();
+    const timeout = setTimeout(() => { controller1.abort(); controller2.abort(); controller3.abort(); }, 60000);
+
+    const [recordResp, analysisResp, profileResp] = await Promise.all([
+      fetch(state.settings.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: state.settings.model,
+          messages: [{ role: 'user', content: state.settings.systemPrompt + '\n\n录音转写文本：\n' + text }],
+          temperature: 0.3,
+        }),
+        signal: controller1.signal,
+      }),
+      fetch(state.settings.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: state.settings.model,
+          messages: [{ role: 'user', content: `你是口腔门诊沟通教练，专门帮助医生提升沟通能力。请对以下医患沟通录音转写文本进行分析，聚焦"医生哪里可以做得更好"。\n\n转写文本：\n${text}\n\n请严格按以下格式输出：\n## ✅ 沟通做得好的地方\n（具体指出）\n\n## ⚠️ 可以改进的地方\n（逐条说明：问题 → 建议怎么说更好）\n\n## 💡 话术建议\n（2-3条更优话术）\n\n## 📋 患者核心诉求\n（一句话）` }],
+          temperature: 0.3,
+        }),
+        signal: controller2.signal,
+      }),
+      fetch(state.settings.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: state.settings.model,
+          messages: [{ role: 'user', content: `你是口腔门诊客户管理专家。请根据医患沟通录音转写文本，提炼出患者画像。\n\n转写文本：\n${text}\n\n请严格按以下格式输出：\n\n## 👤 基本信息\n- 姓名：（如未提及填"未知"）\n- 性别：（根据称呼推断）\n- 大致年龄段：（儿童/青少年/青年/中年/老年）\n\n## 🦷 口腔健康状况\n- 主诉问题：\n- 既往口腔病史：\n- 口腔卫生习惯：（如刷牙频率、是否用牙线等）\n\n## 💰 消费特征\n- 就诊动机：（疼痛/美观/常规检查/他人推荐等）\n- 消费意愿：（高/中/低，需说明推断依据）\n- 对价格的敏感度：（从对话中推断）\n\n## 🎯 沟通偏好\n- 沟通风格：（理性型/焦虑型/随和型/挑剔型）\n- 决策模式：（自主决定/需家人商量/依赖医生建议）\n\n## 💼 成交意向分析\n- 成交意向等级：🔴高/🟡中/🟢低（三选一，红灯=高意向，绿灯=低意向）\n- 等级判断依据：（列出对话中的关键线索）\n- 患者最关注的维度（按重视程度排序，用▶标注最在意的1-2项）：\n  - 价格/性价比\n  - 治疗效果/技术方案\n  - 医生资历/专业信任度\n  - 就诊环境/服务体验\n  - 便捷性（预约灵活度/等待时间/地理位置）\n  - 品牌口碑/他人推荐\n  - 舒适度/无痛体验\n  - 家人意见/陪同者态度\n- 阻碍成交的潜在因素：\n- 促进成交的切入角度/话术建议：\n\n## ⚠️ 风险提示\n- 可能的依从性问题：\n- 需特别关注的点：\n- 流失风险：高/中/低\n\n要求：简洁、客观，无信息则写"未知"，不要编造。` }],
+          temperature: 0.3,
+        }),
+        signal: controller3.signal,
+      }),
+    ]);
+    clearTimeout(timeout);
+
+    const recordData = await recordResp.json();
+    const analysisData = await analysisResp.json();
+    const profileData = await profileResp.json();
+    const record = recordData.choices?.[0]?.message?.content || '生成失败';
+    const analysis = analysisData.choices?.[0]?.message?.content || '分析生成失败';
+    const profile = profileData.choices?.[0]?.message?.content || '';
+
+    state.currentRecord = record;
+    state.currentAnalysis = analysis;
+    state.currentProfile = profile;
+
+    document.getElementById('recordContent').textContent = record;
+    document.getElementById('recordResult').style.display = 'block';
+    const analysisEl = document.getElementById('analysisContent');
+    if (analysisEl) {
+      analysisEl.textContent = analysis;
+      document.getElementById('analysisResult').style.display = 'block';
+    }
+    const profileEl = document.getElementById('profileContent');
+    if (profileEl && profile) {
+      profileEl.textContent = profile;
+      document.getElementById('profileResult').style.display = 'block';
+    }
+
+    document.getElementById('processingBar').style.display = 'none';
+    document.getElementById('recStatusText').textContent = '✅ 完成';
+    document.getElementById('recWave').textContent = '✅ 病历+沟通分析已生成';
+    document.getElementById('copyBtn').disabled = false;
+    document.getElementById('genBtn').disabled = true;
+    showToast('病历+沟通分析已生成', 'success');
+
+    // 自动保存（含录音 base64，若有）
+    const saveRecord = async () => {
+      let audioData = null;
+      if (state.lastAudioBlob) {
+        try {
+          audioData = await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result); // data:audio/webm;base64,...
+            reader.readAsDataURL(state.lastAudioBlob);
+          });
+        } catch (_) {}
+      }
+      const rec = {
+        id: Date.now(),
+        type: 'record',
+        patient: patientName,
+        recordType: recordType,
+        text: text,
+        record: record,
+        analysis: analysis,
+        profile: profile,
+        duration: fmtTime(state.recSeconds),
+        time: new Date().toLocaleString(),
+        audioData: audioData || null,
+      };
+      const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+      records.unshift(rec);
+      localStorage.setItem('dr_records_v2', JSON.stringify(records));
+      updateDashboardStats();
+    };
+    saveRecord();
+  } catch (e) {
+    document.getElementById('processingBar').style.display = 'none';
+    document.getElementById('recStatusText').textContent = '生成失败';
+    document.getElementById('recWave').textContent = '❌ ' + e.message;
+    showToast('后台生成失败: ' + e.message, 'error');
+  }
+}
+
+function updateDashboardStats() {
+  // 看板统计（当前v2版本无dashboard页面，保留函数避免报错）
+  try {
+    const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+    const todayRecords = records.filter(r => r.time && r.time.includes(new Date().toLocaleDateString()));
+    const $today = document.getElementById('statToday'); if ($today) $today.textContent = todayRecords.length;
+    const $total = document.getElementById('statTotal'); if ($total) $total.textContent = records.length;
+    const $patients = document.getElementById('statPatients'); if ($patients) {
+      const uniquePatients = [...new Set(records.map(r => r.patient).filter(Boolean))];
+      $patients.textContent = uniquePatients.length;
+    }
+    const $latest = document.getElementById('statLatest'); if ($latest && records.length) {
+      $latest.textContent = records[0].time || '-';
+    }
+  } catch (e) {}
+}
+
+function nextPatient() {
+  // 清空界面，准备下一位患者
+  document.getElementById('recText').value = '';
+  document.getElementById('recPatient').value = '';
+  document.getElementById('recWave').textContent = '点击开始录音';
+  document.getElementById('recStatusText').textContent = '准备就绪';
+  document.getElementById('recLiveBadge').className = 'rec-live off';
+  document.getElementById('nextPatientBtn').style.display = 'none';
+  document.getElementById('genBtn').disabled = true;
+  document.getElementById('copyBtn').disabled = true;
+  document.getElementById('recBtn').disabled = false;
+  document.getElementById('processingBar').style.display = 'none';
+  document.getElementById('debugLog').style.display = 'none';
+  document.getElementById('debugLog').innerHTML = '';
+  state.currentRecord = '';
+  state.currentAnalysis = '';
+  state.currentProfile = '';
+  state.recSeconds = 0;
+  document.getElementById('recTimer').textContent = '00:00';
+  document.getElementById('recordResult').style.display = 'none';
+  if (document.getElementById('analysisResult')) document.getElementById('analysisResult').style.display = 'none';
+  if (document.getElementById('profileResult')) document.getElementById('profileResult').style.display = 'none';
+  showToast('已就绪，可以处理下一位患者', 'info');
+}
+
+// ========== DEBUG PANEL ==========
+function debugLog(msg) {
+  const el = document.getElementById('debugLog');
+  if (el) {
+    el.innerHTML += '<div>' + new Date().toLocaleTimeString() + ' ' + msg + '</div>';
+    el.scrollTop = el.scrollHeight;
+  }
+  console.log('[DR-AI] ' + msg);
+}
+
+// ========== STT Fallback: HTTP POST (for learning recordings) ==========
+async function transcribeAudioFallback(audioBlob) {
+  const apiKey = getApiKeyForSTT();
+  if (!apiKey) {
+    showToast('请先配置 API Key', 'error');
+    return '';
+  }
+  try {
+    const pcm = await convertToPCM(audioBlob);
+    const pcmBuf = new Uint8Array(pcm.buffer);
+    const resp = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', 'Authorization': 'Bearer ' + apiKey },
+      body: pcmBuf,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || '转写失败（' + resp.status + '）');
+    }
+    const result = await resp.json();
+    return (result.text || '').trim();
+  } catch (e) {
+    showToast(e.message, 'error');
+    return '';
+  }
+}
+
+function convertToPCM(blob) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      console.log('[DR-AI] WebM 原始大小:', (arrayBuffer.byteLength / 1024).toFixed(1), 'KB');
+
+      // 1. 解码音频
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      console.log('[DR-AI] 解码: 采样率=' + audioBuffer.sampleRate + 'Hz, 时长=' + audioBuffer.duration.toFixed(1) + 's, 声道=' + audioBuffer.numberOfChannels);
+
+      // 2. 重采样到 16kHz（fun-asr-realtime 只接受 16kHz）
+      let buffer = audioBuffer;
+      if (audioBuffer.sampleRate !== 16000) {
+        const offlineCtx = new OfflineAudioContext(1, Math.ceil(audioBuffer.duration * 16000), 16000);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(offlineCtx.destination);
+        source.start(0);
+        buffer = await offlineCtx.startRendering();
+        console.log('[DR-AI] 重采样: ' + audioBuffer.sampleRate + 'Hz → 16000Hz, ' + buffer.length + ' 采样点');
+      } else if (audioBuffer.numberOfChannels > 1) {
+        // 多声道混为单声道
+        const offlineCtx = new OfflineAudioContext(1, audioBuffer.length, 16000);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(offlineCtx.destination);
+        source.start(0);
+        buffer = await offlineCtx.startRendering();
+      }
+
+      // 3. Float32 → Int16 PCM
+      const chan = buffer.getChannelData(0);
+      const len = chan.length;
+      const pcm = new Int16Array(len);
+      let maxAmp = 0;
+      for (let i = 0; i < len; i++) {
+        const s = Math.max(-1, Math.min(1, chan[i]));
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        if (Math.abs(pcm[i]) > maxAmp) maxAmp = Math.abs(pcm[i]);
+      }
+      console.log('[DR-AI] PCM: ' + len + ' 采样点, 最大振幅=' + maxAmp + ' (静音阈值~100)');
+
+      audioCtx.close();
+
+      if (maxAmp < 100) {
+        reject(new Error('录音信号太弱（可能是麦克风音量太小或未说话），请靠近麦克风大声说话后重试'));
+        return;
+      }
+
+      resolve(pcm);
+    } catch (e) {
+      console.error('[DR-AI] PCM转换失败:', e);
+      reject(e);
+    }
+  });
+}
+
+// ========== 录音文件导入 ==========
+let _importQueue = [];
+let _importCancel = false;
+let _importRunning = false;
+
+function toggleImportPanel() {
+  const panel = document.getElementById('importPanel');
+  if (!panel) return;
+  const show = panel.style.display === 'none';
+  panel.style.display = show ? 'block' : 'none';
+  document.getElementById('importToggleBtn').textContent = show ? '✖ 关闭导入' : '📂 导入录音文件';
+  if (!show) { _importQueue = []; renderImportList(); }
+}
+
+function handleImportDrop(ev) {
+  const files = ev.dataTransfer.files;
+  addImportFiles(files);
+}
+
+function handleImportFiles(files) {
+  addImportFiles(files);
+}
+
+function addImportFiles(files) {
+  const validTypes = ['audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/webm', 'audio/ogg', 'audio/flac', 'audio/aac', 'audio/x-ms-wma'];
+  for (const f of files) {
+    if (f.size > 1024 * 1024 * 1024) { showToast('文件超过1GB，已跳过: ' + f.name, 'error'); continue; }
+    if (!validTypes.some(t => f.type === t) && !f.name.match(/\.(mp3|m4a|wav|webm|ogg|flac|aac|wma)$/i)) {
+      showToast('不支持的格式，已跳过: ' + f.name, 'error'); continue;
+    }
+    _importQueue.push({ file: f, status: 'waiting', text: '', error: '' });
+  }
+  renderImportList();
+  document.getElementById('importStartBtn').disabled = _importQueue.length === 0;
+}
+
+function renderImportList() {
+  const container = document.getElementById('importFileItems');
+  const area = document.getElementById('importFileList');
+  if (!_importQueue.length) { area.style.display = 'none'; return; }
+  area.style.display = 'block';
+  container.innerHTML = '';
+  _importQueue.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--gy2);font-size:13px';
+    const statusIcon = item.status === 'waiting' ? '⏳' : item.status === 'processing' ? '⏳' : item.status === 'done' ? '✅' : item.status === 'error' ? '❌' : '⏳';
+    div.innerHTML = `<span>${statusIcon}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.file.name}</span><span style="color:var(--gy5);font-size:11px">${(item.file.size/1024/1024).toFixed(1)}MB</span>`;
+    container.appendChild(div);
+  });
+}
+
+async function startImport() {
+  if (_importRunning) return;
+  _importRunning = true;
+  _importCancel = false;
+  document.getElementById('importStartBtn').disabled = true;
+  document.getElementById('importCancelBtn').style.display = 'inline-flex';
+  document.getElementById('importProgressArea').style.display = 'block';
+
+  const total = _importQueue.length;
+  let totalPCMSeconds = 0;
+
+  for (let i = 0; i < total; i++) {
+    if (_importCancel) break;
+    _importQueue[i].status = 'processing';
+    renderImportList();
+    document.getElementById('importCurrentFile').textContent = _importQueue[i].file.name;
+
+    try {
+      const text = await processImportedFile(_importQueue[i].file, i, total);
+      _importQueue[i].status = 'done';
+      _importQueue[i].text = text;
+      if (text) {
+        // 保存到历史记录
+        await saveImportRecord(_importQueue[i].file.name, text);
+      }
+    } catch (e) {
+      _importQueue[i].status = 'error';
+      _importQueue[i].error = e.message;
+      console.error('[Import] 文件处理失败:', e);
+    }
+    renderImportList();
+  }
+
+  _importRunning = false;
+  document.getElementById('importCancelBtn').style.display = 'none';
+  document.getElementById('importStartBtn').disabled = false;
+  document.getElementById('importProgressText').textContent = _importCancel ? '已取消' : '全部处理完成';
+  showToast(_importCancel ? '导入已取消' : '所有文件处理完成', _importCancel ? 'info' : 'success');
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// 极速模式：直接发送原始音频到服务端，调用 Paraformer 文件转写 API（数百倍实时速度）
+async function tryTurboTranscribe(file, apiKey) {
+  const startTime = Date.now();
+  document.getElementById('importProgressFill').style.width = '10%';
+
+  const resp = await fetch('/api/transcribe-turbo', {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type || 'audio/mpeg',
+      'Authorization': 'Bearer ' + apiKey
+    },
+    body: file
+  });
+
+  document.getElementById('importProgressFill').style.width = '90%';
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || '极速模式服务端错误 HTTP ' + resp.status);
+  }
+
+  const result = await resp.json();
+  if (!result.text || !result.text.trim()) {
+    throw new Error('转写结果为空');
+  }
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+  const durMin = result.duration ? Math.round(result.duration / 60) : '?';
+  document.getElementById('importChunkText').textContent =
+    '极速模式完成 · 音频' + durMin + '分钟 · 耗时' + elapsed + '秒';
+
+  return result.text;
+}
+
+async function processImportedFile(file, fileIndex, totalFiles) {
+  // ── 第一阶段：极速模式（Paraformer，数百倍加速）──
+  const apiKey = getApiKeyForSTT();
+  if (apiKey) {
+    try {
+      document.getElementById('importProgressText').textContent = '极速模式：上传音频到云端...';
+      document.getElementById('importChunkText').textContent = formatSize(file.size);
+      const turboText = await tryTurboTranscribe(file, apiKey);
+      if (turboText) {
+        document.getElementById('importProgressFill').style.width = '100%';
+        document.getElementById('importProgressText').textContent = '极速模式完成，AI 生成病历...';
+        await backgroundGenerate(turboText);
+        return turboText;
+      }
+    } catch (e) {
+      console.log('[Import] 极速模式失败，回退到并行模式:', e.message);
+      document.getElementById('importProgressText').textContent = '极速模式失败，切换并行模式...';
+    }
+  }
+
+  // ── 第二阶段：并行 PCM 转写（12路并发）──
+  // 1. 解码音频文件 → 16kHz Int16 PCM
+  document.getElementById('importProgressText').textContent = '解码音频并重采样到16kHz...';
+  document.getElementById('importChunkText').textContent = '解码中';
+
+  let pcmInt16;
+  try {
+    pcmInt16 = await decodeAudioFileToPCM(file);
+  } catch (e) {
+    throw new Error('音频解码失败（格式可能不支持）: ' + e.message);
+  }
+
+  const totalSamples = pcmInt16.length;
+  const totalMinutes = Math.floor(totalSamples / 16000 / 60);
+  document.getElementById('importChunkText').textContent = '时长约 ' + totalMinutes + ' 分钟，开始并发转写';
+
+  // 2. 分段（每段 3 分钟，更细粒度 = 更高并行度）
+  const CHUNK_SAMPLES = 3 * 60 * 16000;
+  const totalChunks = Math.ceil(totalSamples / CHUNK_SAMPLES);
+  if (!apiKey) throw new Error('请先在设置中填写 STT API Key');
+
+  // 3. 并发转写（12路并行）
+  const CONCURRENCY = 12;
+  let completed = 0;
+
+  document.getElementById('importProgressText').textContent = '并发转写中（12路并行，' + totalChunks + '段）...';
+
+  const chunkTasks = Array.from({ length: totalChunks }, (_, c) => c);
+  const chunkResults = await pMap(
+    chunkTasks,
+    async (c) => {
+      if (_importCancel) return '__CANCEL__';
+      const start = c * CHUNK_SAMPLES;
+      const end = Math.min(start + CHUNK_SAMPLES, totalSamples);
+      const chunk = pcmInt16.slice(start, end);
+
+      let text = '';
+      try {
+        const resp = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream', 'Authorization': 'Bearer ' + apiKey },
+          body: chunk.buffer,
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || 'HTTP ' + resp.status);
+        }
+        const result = await resp.json();
+        text = (result.text || '').trim();
+      } catch (e) {
+        console.error('[Import] 段' + (c + 1) + ' 失败:', e.message);
+        text = '_ERR_:' + e.message;
+      }
+
+      // 更新进度
+      completed++;
+      const pct = Math.round((completed / totalChunks) * 100);
+      document.getElementById('importProgressFill').style.width = pct + '%';
+      document.getElementById('importProgressText').textContent =
+        '转写中（' + completed + '/' + totalChunks + '段，12路并行）...';
+      document.getElementById('importChunkText').textContent =
+        fmtTime(Math.floor(start / 16000)) + ' / ' + fmtTime(Math.floor(totalSamples / 16000));
+
+      return text;
+    },
+    CONCURRENCY
+  );
+
+  if (_importCancel) throw new Error('用户取消');
+
+  const fullText = chunkResults.filter(r => r && !r.startsWith('_ERR_') && r !== '__CANCEL__').join('\n');
+  document.getElementById('importProgressFill').style.width = '100%';
+  document.getElementById('importChunkText').textContent = '转写完成';
+
+  if (!fullText.trim()) throw new Error('所有分段转写均失败，请检查 API Key 或网络');
+
+  // 4. 调用 AI 生成病历 + 沟通分析
+  document.getElementById('importProgressText').textContent = 'AI 生成病历...';
+  await backgroundGenerate(fullText);
+
+  return fullText;
+}
+
+// 解码任意音频文件为 16kHz Int16 PCM（复用 convertToPCM 的核心逻辑，跳过静音检测）
+function decodeAudioFileToPCM(fileOrBlob) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const arrayBuffer = await fileOrBlob.arrayBuffer();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+      // 重采样到 16kHz
+      let buffer = audioBuffer;
+      if (audioBuffer.sampleRate !== 16000 || audioBuffer.numberOfChannels > 1) {
+        const targetLen = Math.ceil(audioBuffer.duration * 16000);
+        const offlineCtx = new OfflineAudioContext(1, targetLen, 16000);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(offlineCtx.destination);
+        source.start(0);
+        buffer = await offlineCtx.startRendering();
+      }
+
+      // Float32 → Int16
+      const chan = buffer.getChannelData(0);
+      const len = chan.length;
+      const pcm = new Int16Array(len);
+      for (let i = 0; i < len; i++) {
+        const s = Math.max(-1, Math.min(1, chan[i]));
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+
+      await audioCtx.close();
+      resolve(pcm);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+// 并发控制：同时最多 n 个 promise 在跑
+async function pMap(items, fn, concurrency) {
+  let idx = 0, running = 0, results = new Array(items.length);
+  return new Promise((resolve, reject) => {
+    function next() {
+      while (idx < items.length && running < concurrency) {
+        const i = idx++;
+        running++;
+        fn(items[i], i).then(r => {
+          results[i] = r;
+          running--;
+          next();
+        }).catch(e => { results[i] = { error: e.message }; running--; next(); });
+      }
+      if (running === 0 && idx >= items.length) resolve(results);
+    }
+    next();
+  });
+}
+
+async function saveImportRecord(fileName, text) {
+  const patientName = fileName.replace(/\.[^.]+$/, '').substring(0, 20);
+  const record = {
+    id: Date.now(),
+    type: 'record',
+    patient: patientName,
+    recType: 'import',
+    time: new Date().toLocaleString(),
+    duration: '--:--',
+    text: text,
+    record: state.currentRecord || '',
+    analysis: state.currentAnalysis || '',
+    profile: state.currentProfile || '',
+    audioData: null,
+  };
+  const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+  records.unshift(record);
+  localStorage.setItem('dr_records_v2', JSON.stringify(records));
+  loadHistory();
+  showToast('已保存: ' + patientName, 'success');
+}
+
+function cancelImport() {
+  _importCancel = true;
+  showToast('正在取消...', 'info');
+}
+
+// ========== LEARN TRANSCRIBE + SUMMARIZE ==========
+async function learnTranscribeAndSummarize(blob) {
+  document.getElementById('learnStatus').textContent = '转写中...';
+  const text = await transcribeAudioFallback(blob);
+  if (!text) { document.getElementById('learnStatus').textContent = '转写为空'; return; }
+
+  document.getElementById('learnText').value = text;
+  document.getElementById('learnStatus').textContent = '转写完成，正在总结...';
+
+  const key = state.settings.apiKey;
+  if (!key) { document.getElementById('learnStatus').textContent = '请填写 AI API Key'; return; }
+
+  try {
+    const summaryPrompt = `你是口腔门诊沟通教练。以下是医患沟通录音的转写文本，请帮助医生提升沟通能力。
+
+========== 转写文本 ==========
+${text}
+
+========== 请按以下格式输出 ==========
+## ✅ 沟通做得好的地方
+（具体指出医生做得好的地方，巩固优点）
+
+## ⚠️ 可以改进的地方
+（医生沟通中不恰当、遗漏、或表达不妥的地方，逐条具体说明）
+- 每条格式：问题描述 → 建议怎么说更好
+
+## 💡 话术建议
+（针对本次沟通，给出2-3条更优的话术示范）
+
+## 📋 患者核心诉求
+（一句话总结患者最关心的点）`;
+
+    const aiResp = await fetch(state.settings.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({
+        model: state.settings.model,
+        messages: [{ role: 'user', content: summaryPrompt }],
+        temperature: 0.3,
+      }),
+    });
+    const data = await aiResp.json();
+    const summary = data.choices?.[0]?.message?.content || '总结生成失败';
+    document.getElementById('learnSummary').value = summary;
+    document.getElementById('learnStatus').textContent = '总结完成';
+    showToast('学习录音转写+总结完成', 'success');
+  } catch (e) {
+    document.getElementById('learnStatus').textContent = '失败: ' + e.message;
+    showToast('学习录音处理失败: ' + e.message, 'error');
+  }
+}
+
+// ========== GENERATE RECORD (manual retry) ==========
+async function generateRecord() {
+  const text = document.getElementById('recText').value.trim();
+  if (!text) { showToast('请先录音', 'error'); return; }
+  if (!state.settings.apiKey) { showToast('请先在设置中填写 AI API Key', 'error'); return; }
+
+  document.getElementById('genBtn').disabled = true;
+  document.getElementById('genBtn').textContent = '⏳ 生成中...';
+  document.getElementById('processingBar').style.display = 'flex';
+  document.getElementById('processingText').textContent = 'AI 正在生成病历+沟通分析+患者画像...';
+  await backgroundGenerate(text);
+  document.getElementById('genBtn').disabled = true;
+  document.getElementById('genBtn').textContent = '✨ AI生成病历';
+}
+
+function copyRecord() {
+  if (!state.currentRecord) return;
+  navigator.clipboard.writeText(state.currentRecord).then(() => {
+    showToast('病历已复制到剪贴板', 'success');
+  });
+}
+
+function copyLearnSummary() {
+  const summary = document.getElementById('learnSummary').value;
+  if (!summary) { showToast('暂无总结内容', 'error'); return; }
+  navigator.clipboard.writeText(summary).then(() => {
+    showToast('总结已复制', 'success');
+  });
+}
+
+function saveRecord() {
+  const record = {
+    id: Date.now(),
+    type: 'record',
+    patient: document.getElementById('recPatient').value || '未命名',
+    recordType: document.getElementById('recType').value,
+    text: document.getElementById('recText').value,
+    record: state.currentRecord,
+    analysis: state.currentAnalysis || '',
+    profile: state.currentProfile || '',
+    time: new Date().toLocaleString(),
+  };
+  const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+  records.unshift(record);
+  localStorage.setItem('dr_records_v2', JSON.stringify(records));
+  loadHistory();  // 刷新历史列表
+  showToast('记录已保存', 'success');
+}
+
+// ========== LEARN ==========
+async function toggleLearn() {
+  if (state.learnRecording) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.learnMediaRecorder = new MediaRecorder(stream);
+    state.learnChunks = [];
+    state.learnMediaRecorder.ondataavailable = e => { if (e.data.size > 0) state.learnChunks.push(e.data); };
+    state.learnMediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      // 停止后保存 blob 供回放，然后转写 + 总结
+      const blob = new Blob(state.learnChunks, { type: 'audio/webm' });
+      state.lastLearnAudioBlob = blob;
+      await learnTranscribeAndSummarize(blob);
+    };
+    state.learnMediaRecorder.start(1000);
+    state.learnRecording = true;
+    state.learnSeconds = 0;
+    document.getElementById('learnBtn').textContent = '⏹ 停止';
+    document.getElementById('learnStopBtn').disabled = false;
+    document.getElementById('learnPauseBtn').classList.add('show');
+    state.learnTimer = setInterval(() => {
+      state.learnSeconds++;
+      document.getElementById('learnTimer').textContent = fmtTime(state.learnSeconds);
+    }, 1000);
+    showToast('开始学习录音', 'info');
+  } catch (e) {
+    showToast('无法访问麦克风: ' + e.message, 'error');
+  }
+}
+
+function stopLearn() {
+  if (!state.learnRecording) return;
+  state.learnMediaRecorder.stop();
+  state.learnRecording = false;
+  state.learnPaused = false;
+  clearInterval(state.learnTimer);
+  document.getElementById('learnBtn').textContent = '🔴 开始学习录音';
+  document.getElementById('learnStopBtn').disabled = true;
+  document.getElementById('learnPauseBtn').classList.remove('show');
+  document.getElementById('learnPauseBtn').textContent = '⏸ 暂停';
+}
+
+function toggleLearnPause() {
+  if (!state.learnRecording || !state.learnMediaRecorder) return;
+  if (state.learnPaused) {
+    try { if (state.learnMediaRecorder.state === 'paused') state.learnMediaRecorder.resume(); } catch(e) {}
+    state.learnPaused = false;
+    document.getElementById('learnPauseBtn').textContent = '⏸ 暂停';
+    showToast('继续录音', 'info');
+  } else {
+    try { if (state.learnMediaRecorder.state === 'recording') state.learnMediaRecorder.pause(); } catch(e) {}
+    state.learnPaused = true;
+    document.getElementById('learnPauseBtn').textContent = '▶️ 继续';
+    showToast('已暂停', 'info');
+  }
+}
+
+// ========== HISTORY ==========
+function loadHistory(filter) {
+  const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+  const body = document.getElementById('histBody');
+  const empty = document.getElementById('histEmpty');
+  body.innerHTML = '';
+  const filtered = filter ? records.filter(r => r.type === filter) : records;
+  if (filtered.length === 0) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  filtered.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.time}</td>
+      <td>${r.type === 'record' ? '📋 病历' : r.type === 'learn' ? '📚 学习' : '📸 方案'}</td>
+      <td>${r.patient || r.topic || '未命名'}</td>
+      <td>${r.duration || r.imageCount ? (r.imageCount + '张图') : '--'}</td>
+      <td>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px" onclick="viewRecord(${r.id})">查看</button>
+        ${r.audioData ? `<button class="btn btn-outline" style="padding:4px 10px;font-size:12px" onclick="quickPlayAudio(${r.id})" title="播放录音">▶️</button>` : ''}
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;color:var(--red)" onclick="deleteRecord(${r.id})">删除</button>
+      </td>`;
+    body.appendChild(tr);
+  });
+}
+
+function filterHistory(type) {
+  if (type === 'all') type = '';
+  loadHistory(type);
+}
+
+function viewRecord(id) {
+  const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+
+  const isRecord = r.type === 'record';
+  const isPlan = r.type === 'plan';
+  const recordContent = r.record || '';
+  const analysisContent = r.analysis || '';
+  const profileContent = r.profile || '';
+  const textContent = r.text || r.summary || '';
+
+  // 构建弹窗 HTML
+  const overlay = document.createElement('div');
+  overlay.className = 'hist-modal-overlay';
+  overlay.setAttribute('data-record-id', id);
+
+  let sections = '';
+  let headerTitle = '';
+  let headerIcon = '';
+
+  if (isPlan) {
+    headerIcon = '📸';
+    headerTitle = r.patient || '未命名';
+    // 影像缩略图
+    if (r.imageThumbs && r.imageThumbs.length > 0) {
+      sections += `<div class="hist-section">
+      <div class="hist-section-header"><h4>🩻 上传的影像资料（${r.imageThumbs.length}张）</h4></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding:8px;background:var(--gy1);border-radius:8px;border:1px solid var(--gy3)">`;
+      for (const t of r.imageThumbs) {
+        sections += `<img src="${t.thumb}" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid var(--gy3)" title="${t.type === 1 ? '影像资料' : '病历截图'}">`;
+      }
+      sections += `</div></div>`;
+    }
+    // 医生版方案
+    if (r.planContent) {
+      sections += `
+    <div class="hist-section">
+      <div class="hist-section-header">
+        <h4>🩺 医生版方案</h4>
+        <button class="btn btn-primary" style="padding:5px 14px;font-size:12px" onclick="copyFromModal(event, 'plandoc-${id}')">📋 复制</button>
+      </div>
+      <div class="hist-section-content" id="plandoc-${id}">${escapeHtml(r.planContent) || '（无内容）'}</div>
+    </div>`;
+    }
+    // 患者版方案
+    if (r.planPatient) {
+      sections += `
+    <div class="hist-section">
+      <div class="hist-section-header">
+        <h4>👨‍👩‍👧 患者版方案（促成交）</h4>
+        <button class="btn btn-outline" style="padding:5px 14px;font-size:12px" onclick="copyFromModal(event, 'planpat-${id}')">📋 复制</button>
+      </div>
+      <div class="hist-section-content" id="planpat-${id}">${escapeHtml(r.planPatient) || '（无内容）'}</div>
+    </div>`;
+    }
+    // E看牙病历
+    if (r.planRecord) {
+      sections += `
+    <div class="hist-section">
+      <div class="hist-section-header">
+        <h4>🦷 E看牙病历</h4>
+        <button class="btn btn-outline" style="padding:5px 14px;font-size:12px" onclick="copyFromModal(event, 'planrec-${id}')">📋 复制到E看牙</button>
+      </div>
+      <div class="hist-section-content" id="planrec-${id}" style="background:var(--bluel)">${escapeHtml(r.planRecord) || '（无内容）'}</div>
+    </div>`;
+    }
+    // 受影响牙位
+    if (r.planAffectedTeeth && r.planAffectedTeeth.length > 0) {
+      sections += `
+    <div class="hist-section">
+      <div class="hist-section-header"><h4>🦷 需治疗牙位</h4></div>
+      <div class="hist-section-content" style="max-height:300px">${renderToothDiagramSvg(r.planAffectedTeeth)}</div>
+    </div>`;
+    }
+    // 补充文字
+    if (r.notes) {
+      sections += `
+    <div class="hist-section">
+      <div class="hist-section-header"><h4>📝 补充说明</h4></div>
+      <div class="hist-section-content" style="max-height:160px">${escapeHtml(r.notes)}</div>
+    </div>`;
+    }
+  } else if (isRecord) {
+    headerIcon = '📋';
+    headerTitle = r.patient || '未命名';
+    // 病历内容
+    sections += `
+    <div class="hist-section">
+      <div class="hist-section-header">
+        <h4>📋 生成的病历</h4>
+        <button class="btn btn-primary" style="padding:5px 14px;font-size:12px" onclick="copyFromModal(event, 'rec-${id}')">📋 复制病历</button>
+      </div>
+      <div class="hist-section-content" id="rec-${id}">${escapeHtml(recordContent) || '（无病历内容）'}</div>
+    </div>`;
+    // 沟通分析
+    if (analysisContent) {
+      sections += `
+    <div class="hist-section">
+      <div class="hist-section-header">
+        <h4>🗣️ 沟通分析</h4>
+        <button class="btn btn-outline" style="padding:5px 14px;font-size:12px" onclick="copyFromModal(event, 'ana-${id}')">📋 复制分析</button>
+      </div>
+      <div class="hist-section-content" id="ana-${id}">${escapeHtml(analysisContent)}</div>
+    </div>`;
+    }
+    // 患者画像
+    if (profileContent) {
+      sections += `
+    <div class="hist-section">
+      <div class="hist-section-header">
+        <h4>👤 患者画像</h4>
+        <button class="btn btn-outline" style="padding:5px 14px;font-size:12px" onclick="copyFromModal(event, 'prof-${id}')">📋 复制</button>
+      </div>
+      <div class="hist-section-content" id="prof-${id}">${escapeHtml(profileContent)}</div>
+    </div>`;
+    }
+  } else {
+    headerIcon = '📚';
+    headerTitle = r.topic || '未命名';
+    // 学习记录
+    sections += `
+    <div class="hist-section">
+      <div class="hist-section-header">
+        <h4>📝 转写文本</h4>
+        <button class="btn btn-outline" style="padding:5px 14px;font-size:12px" onclick="copyFromModal(event, 'txt-${id}')">📋 复制</button>
+      </div>
+      <div class="hist-section-content" id="txt-${id}">${escapeHtml(textContent) || '（无内容）'}</div>
+    </div>`;
+    if (r.summary) {
+      sections += `
+    <div class="hist-section">
+      <div class="hist-section-header">
+        <h4>🤖 AI 总结</h4>
+        <button class="btn btn-outline" style="padding:5px 14px;font-size:12px" onclick="copyFromModal(event, 'sum-${id}')">📋 复制</button>
+      </div>
+      <div class="hist-section-content" id="sum-${id}">${escapeHtml(r.summary)}</div>
+    </div>`;
+    }
+  }
+
+  // 转写原文（录音病历）
+  if (isRecord && textContent) {
+    sections += `
+    <div class="hist-section">
+      <div class="hist-section-header">
+        <h4>🎙️ 原始转写</h4>
+        <button class="btn btn-outline" style="padding:5px 14px;font-size:12px" onclick="copyFromModal(event, 'txt-${id}')">📋 复制</button>
+      </div>
+      <div class="hist-section-content" id="txt-${id}" style="max-height:200px">${escapeHtml(textContent)}</div>
+    </div>`;
+  }
+
+  // 患者姓名：record/plan 类型可编辑，learn 类型不可编辑
+  const nameHtml = (isRecord || isPlan)
+    ? `<span id="hist-patient-name-${id}" class="hist-editable-name">${escapeHtml(headerTitle)}</span>
+       <button class="hist-edit-name-btn" onclick="startEditPatientName(${id},'${r.type}')" title="编辑患者姓名">✏️</button>`
+    : escapeHtml(headerTitle);
+
+  overlay.innerHTML = `
+    <div class="hist-modal" onclick="event.stopPropagation()">
+      <div class="hist-modal-header">
+        <div>
+          <h3 id="hist-header-h3-${id}">${headerIcon} ${nameHtml}</h3>
+          <div class="hist-modal-meta">
+            <span>${r.time}</span>
+            ${r.duration ? '<span>时长：' + r.duration + '</span>' : ''}
+            ${r.recordType ? '<span>类型：' + r.recordType + '</span>' : ''}
+            ${isPlan ? '<span>📸 治疗方案</span>' : ''}
+          </div>
+        </div>
+        <button class="hist-modal-close" onclick="closeHistoryModal()">&times;</button>
+      </div>
+      ${r.audioData ? `<div class="hist-audio-player"><span style="font-size:13px;color:var(--gy5);margin-right:8px">🎙️ 原始录音</span><audio controls style="flex:1;height:36px" src="${r.audioData}"></audio></div>` : ''}
+      <div class="hist-modal-body">${sections}</div>
+    </div>`;
+
+  // 点击遮罩关闭
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeHistoryModal();
+  });
+
+  // ESC 关闭
+  const escHandler = function(e) {
+    if (e.key === 'Escape') { closeHistoryModal(); document.removeEventListener('keydown', escHandler); }
+  };
+  document.addEventListener('keydown', escHandler);
+  overlay._escHandler = escHandler;
+
+  document.body.appendChild(overlay);
+}
+
+// ========== 历史记录 - 编辑患者姓名 ==========
+function startEditPatientName(id, type) {
+  const nameSpan = document.getElementById('hist-patient-name-' + id);
+  if (!nameSpan) return;
+  const currentName = nameSpan.textContent;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.id = 'hist-patient-input-' + id;
+  input.className = 'hist-name-input';
+  input.value = currentName;
+  input.setAttribute('data-record-id', id);
+  input.setAttribute('data-record-type', type);
+  input.addEventListener('blur', function() { savePatientName(id, type); });
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
+    if (e.key === 'Escape') { cancelEditPatientName(id, currentName); }
+  });
+  nameSpan.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+function cancelEditPatientName(id, originalName) {
+  const input = document.getElementById('hist-patient-input-' + id);
+  if (!input) return;
+  const span = document.createElement('span');
+  span.id = 'hist-patient-name-' + id;
+  span.className = 'hist-editable-name';
+  span.textContent = originalName;
+  input.replaceWith(span);
+}
+
+function savePatientName(id, type) {
+  const input = document.getElementById('hist-patient-input-' + id);
+  if (!input) return;
+  const newName = input.value.trim();
+  const displayName = newName || '未命名';
+
+  // 更新 localStorage
+  const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+  const idx = records.findIndex(r => r.id === id);
+  if (idx !== -1) {
+    if (type === 'learn') {
+      records[idx].topic = displayName;
+    } else {
+      records[idx].patient = displayName;
+    }
+    localStorage.setItem('dr_records_v2', JSON.stringify(records));
+  }
+
+  // 替换 input 回 span
+  const span = document.createElement('span');
+  span.id = 'hist-patient-name-' + id;
+  span.className = 'hist-editable-name';
+  span.textContent = displayName;
+  input.replaceWith(span);
+
+  // 刷新历史表格中对应的行
+  refreshHistoryRow(id, displayName, type);
+
+  showToast('患者姓名已更新', 'success');
+}
+
+function refreshHistoryRow(id, displayName, type) {
+  const body = document.getElementById('histBody');
+  if (!body) return;
+  // 查找表格中对应 id 的"查看"按钮所在的行
+  const rows = body.querySelectorAll('tr');
+  for (const row of rows) {
+    const viewBtn = row.querySelector('button[onclick*="' + id + '"]');
+    if (viewBtn) {
+      const cells = row.querySelectorAll('td');
+      if (cells.length >= 3) {
+        cells[2].textContent = displayName;
+      }
+      break;
+    }
+  }
+}
+
+function refreshHistoryRow(id, displayName, type) {
+  const body = document.getElementById('histBody');
+  if (!body) return;
+  // 查找表格中对应 id 的"查看"按钮所在的行
+  const rows = body.querySelectorAll('tr');
+  for (const row of rows) {
+    const viewBtn = row.querySelector('button[onclick*="' + id + '"]');
+    if (viewBtn) {
+      const cells = row.querySelectorAll('td');
+      if (cells.length >= 3) {
+        cells[2].textContent = displayName;
+      }
+      break;
+    }
+  }
+}
+
+// 历史列表快速播放录音（不打开弹窗）
+let _quickAudioEl = null;
+function quickPlayAudio(id) {
+  const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+  const r = records.find(x => x.id === id);
+  if (!r || !r.audioData) { showToast('该记录没有保存录音', 'error'); return; }
+
+  // 若已有播放器在同一条记录上播放，点击则停止并移除
+  if (_quickAudioEl && _quickAudioEl.dataset.recordId === String(id)) {
+    _quickAudioEl.pause();
+    _quickAudioEl.remove();
+    _quickAudioEl = null;
+    return;
+  }
+  // 否则，关闭旧的，创建新的
+  if (_quickAudioEl) { _quickAudioEl.pause(); _quickAudioEl.remove(); _quickAudioEl = null; }
+
+  const audio = document.createElement('audio');
+  audio.src = r.audioData;
+  audio.controls = true;
+  audio.dataset.recordId = String(id);
+  audio.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.2);padding:6px 12px;width:300px';
+  audio.onended = () => { audio.remove(); _quickAudioEl = null; };
+  document.body.appendChild(audio);
+  _quickAudioEl = audio;
+  audio.play();
+}
+
+function closeHistoryModal() {
+  const overlay = document.querySelector('.hist-modal-overlay');
+  if (!overlay) return;
+  if (overlay._escHandler) document.removeEventListener('keydown', overlay._escHandler);
+  overlay.remove();
+}
+
+function copyFromModal(event, elementId) {
+  event.stopPropagation();
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    showToast('已复制到剪贴板', 'success');
+  });
+}
+
+function deleteRecord(id) {
+  if (!confirm('确定删除这条记录？')) return;
+  let records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+  records = records.filter(r => r.id !== id);
+  localStorage.setItem('dr_records_v2', JSON.stringify(records));
+  loadHistory();
+  showToast('记录已删除', 'success');
+}
+
+// ========== EXPORT / SAVE ==========
+function exportRecordPDF() {
+  const content = document.getElementById('recordContent').textContent;
+  if (!content) { showToast('暂无病历内容', 'error'); return; }
+  const win = window.open('', '_blank');
+  win.document.write(`<pre style="font-family:Microsoft YaHei,sans-serif;font-size:14px;line-height:2;padding:32px;white-space:pre-wrap">${escapeHtml(content)}</pre>`);
+  win.document.close();
+  setTimeout(() => win.print(), 500);
+}
+
+function saveLearnRecord() {
+  const text = document.getElementById('learnText').value.trim();
+  const summary = document.getElementById('learnSummary').value.trim();
+  if (!text && !summary) { showToast('暂无内容可保存', 'error'); return; }
+
+  const doSave = async () => {
+    let audioData = null;
+    if (state.lastLearnAudioBlob) {
+      try {
+        audioData = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(state.lastLearnAudioBlob);
+        });
+      } catch (_) {}
+    }
+    const record = {
+      id: Date.now(),
+      type: 'learn',
+      topic: document.getElementById('learnTopic').value || '未命名',
+      text: text,
+      summary: summary,
+      duration: fmtTime(state.learnSeconds),
+      time: new Date().toLocaleString(),
+      audioData: audioData || null,
+    };
+    const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+    records.unshift(record);
+    localStorage.setItem('dr_records_v2', JSON.stringify(records));
+    loadHistory();
+    showToast('学习记录已保存', 'success');
+  };
+  doSave();
+}
+
+// ========== PLAN ==========
+let planImages = [];  // { type:1|2, file, preview }
+
+function handlePlanDrop(files, type) {
+  const maxPerType = type === 1 ? 4 : 2;
+  const currentOfType = planImages.filter(p => p.type === type).length;
+  const canAdd = Math.min(files.length, maxPerType - currentOfType, 6 - planImages.length);
+  for (let i = 0; i < canAdd; i++) {
+    const f = files[i];
+    if (!f.type.startsWith('image/')) continue;
+    const reader = new FileReader();
+    reader.onload = e => {
+      planImages.push({ type, file: f, preview: e.target.result });
+      renderPlanPreviews();
+    };
+    reader.readAsDataURL(f);
+  }
+}
+
+function handlePlanFiles(input, type) {
+  for (const f of input.files) {
+    if (planImages.length >= 6) break;
+    const reader = new FileReader();
+    reader.onload = e => {
+      planImages.push({ type, file: f, preview: e.target.result });
+      renderPlanPreviews();
+    };
+    reader.readAsDataURL(f);
+  }
+  input.value = '';
+}
+
+function renderPlanPreviews() {
+  const el = document.getElementById('planPreviews');
+  el.innerHTML = '';
+  planImages.forEach((img, i) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'position:relative;display:inline-block';
+    div.innerHTML = `
+      <img src="${img.preview}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--gy3)">
+      <button onclick="removePlanImg(${i})" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer">×</button>`;
+    el.appendChild(div);
+  });
+}
+
+function removePlanImg(i) {
+  planImages.splice(i, 1);
+  renderPlanPreviews();
+}
+
+function copyPlanText() {
+  if (!state.planContent) { showToast('暂无方案内容', 'error'); return; }
+  navigator.clipboard.writeText(state.planContent).then(() => showToast('治疗方案已复制', 'success'));
+}
+
+function copyPlanRecord() {
+  if (!state.planRecord) { showToast('暂无病历内容', 'error'); return; }
+  navigator.clipboard.writeText(state.planRecord).then(() => showToast('病历已复制，可粘贴到E看牙', 'success'));
+}
+
+function switchPlanTab(tabName) {
+  document.querySelectorAll('.plan-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.plan-tab-panel').forEach(p => p.classList.remove('active'));
+  const btn = document.querySelector(`.plan-tab[data-ptab="${tabName}"]`);
+  const panel = document.getElementById('ptab-' + tabName);
+  if (btn) btn.classList.add('active');
+  if (panel) panel.classList.add('active');
+}
+
+function generatePatientPdf() {
+  if (!state.planPatient) { showToast('暂无患者版方案', 'error'); return; }
+  const w = window.open('', '_blank', 'width=900,height=700');
+  const clinic = localStorage.getItem('dr_clinic_v2') || '德仁口腔';
+  const doctor = localStorage.getItem('dr_doctor_v2') || '马医生';
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>治疗方案 - 患者版</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:#333;max-width:720px;margin:0 auto;padding:30px}
+  .patient-hero{text-align:center;padding:28px 20px;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;border-radius:12px;margin-bottom:16px}
+  .patient-hero h2{font-size:20px;font-weight:700;margin:0 0 4px}.patient-hero .sub{font-size:13px;opacity:.85}
+  .patient-kpi{display:flex;gap:10px;margin-bottom:16px}
+  .kpi-item{flex:1;background:#fff;border-radius:10px;padding:14px 10px;text-align:center;border:1px solid #e5e7eb}
+  .kpi-item .kpi-num{font-size:26px;font-weight:800;color:#1e40af;line-height:1.2}
+  .kpi-item .kpi-label{font-size:11px;color:#666;margin-top:2px}
+  .card{background:#fff;border-radius:12px;overflow:hidden;margin-bottom:14px;border:1px solid #e5e7eb}
+  .card-title{display:flex;align-items:center;gap:10px;padding:14px 18px;font-size:15px;font-weight:700}
+  .card-body{padding:14px 18px 18px;font-size:15px;line-height:1.85}
+  .card-body p{margin:0 0 10px}.card-body p:last-child{margin:0}
+  .pc-problem .card-title{background:#fef2f2;color:#991b1b}
+  .pc-solution .card-title{background:#eff6ff;color:#1e40af}
+  .pc-timeline .card-title{background:#f0fdf4;color:#166534}
+  .pc-cost .card-title{background:#fffbeb;color:#92400e}
+  .pc-usp .card-title{background:#faf5ff;color:#6b21a8}
+  .patient-cta{text-align:center;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;padding:22px 20px;border-radius:10px;margin-top:12px}
+  .patient-cta .cta-phone{font-size:26px;font-weight:800;letter-spacing:1px}
+  .patient-cta .cta-note{font-size:12px;opacity:.8;margin-top:4px}
+  .patient-steps{display:flex;flex-direction:column;gap:10px;padding:8px 0}
+  .step-row{display:flex;align-items:flex-start;gap:12px}
+  .step-num{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:#16a34a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+  .step-info{flex:1}.step-info .st-title{font-weight:600;font-size:14px;margin-bottom:2px}
+  .step-info .st-desc{font-size:12px;color:#666;line-height:1.5}
+  .fee-table{width:100%;font-size:13px;border-collapse:collapse}
+  .fee-table td{padding:6px 0;border-bottom:1px solid #f3f4f6;vertical-align:top;line-height:1.6}
+  .fee-table tr:last-child td{border-bottom:2px solid #f59e0b;font-weight:700;color:#991b1b}
+  .tooth-diagram svg{max-width:100%}
+  .tooth-tip{font-size:11px;color:#999;text-align:center;margin-top:4px}
+  .footer{text-align:center;color:#999;font-size:11px;margin-top:24px;border-top:1px solid #eee;padding-top:16px}
+  @media print{body{padding:20px}}
+</style></head><body>
+${renderPatientPlanHtml(clinic, doctor)}
+<div class="footer">本方案由德仁口腔AI助手生成 · 仅供患者参考 · 具体以医生面诊为准</div>
+</body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 600);
+}
+
+function renderPatientPlanHtml(clinic, doctor) {
+  const p = state.planPatient || '';
+  if (!p) return '<p style="color:var(--gy5);text-align:center;padding:32px">暂无患者版方案内容</p>';
+
+  const sections = parsePatientSections(p);
+  const affected = state.planAffectedTeeth || [];
+
+  // 提取关键数字
+  const kpis = extractPatientKPIs(p, affected);
+
+  let html = '';
+
+  // 顶部标题
+  html += `<div class="patient-hero"><h2>🦷 您的专属治疗方案</h2><div class="sub">${clinic} · ${doctor}</div></div>`;
+
+  // 如果解析结果太少（<2个有效段落），用原始文本 fallback 渲染
+  if (sections.length < 2) {
+    html += '<div class="patient-card pc-problem"><div class="patient-card-title">🔍 诊断与治疗建议</div><div class="patient-card-body" style="font-size:15px;line-height:1.9">';
+    html += mdToHtml(p);
+    html += '</div></div>';
+  } else {
+    // 三个关键数字
+    if (kpis.length > 0) {
+      html += '<div class="patient-kpi">';
+      for (const kpi of kpis) {
+        html += `<div class="patient-kpi-item"><div class="kpi-num">${kpi.num}</div><div class="kpi-label">${kpi.label}</div></div>`;
+      }
+      html += '</div>';
+    }
+
+    // 牙齿图示
+    html += renderToothDiagramSvg(affected);
+
+    // 卡片式内容
+    for (const sec of sections) {
+      const cls = sec.type === 'problem' ? 'pc-problem' :
+                  sec.type === 'solution' ? 'pc-solution' :
+                  sec.type === 'timeline' ? 'pc-timeline' :
+                  sec.type === 'cost' ? 'pc-cost' : 'pc-usp';
+
+      let bodyHtml = '';
+      if (sec.type === 'solution' && sec.steps && sec.steps.length > 0) {
+        bodyHtml = '<div class="patient-steps">';
+        for (let i = 0; i < sec.steps.length; i++) {
+          bodyHtml += `<div class="patient-step"><div class="patient-step-num">${i + 1}</div><div class="patient-step-info"><div class="step-title">${sec.steps[i].title}</div><div class="step-desc">${sec.steps[i].desc}</div></div></div>`;
+        }
+        bodyHtml += '</div>';
+      } else if (sec.type === 'cost' && sec.feeItems && sec.feeItems.length > 0) {
+        bodyHtml = '<table class="patient-fee-table">';
+        for (const item of sec.feeItems) {
+          bodyHtml += `<tr><td>${item.name}</td><td style="text-align:right">${item.price}</td></tr>`;
+        }
+        bodyHtml += '</table>';
+      } else {
+        bodyHtml = sec.html || sec.text;
+      }
+
+      html += `<div class="patient-card ${cls}"><div class="patient-card-title">${sec.icon} ${sec.title}</div><div class="patient-card-body">${bodyHtml}</div></div>`;
+    }
+  }
+
+  // CTA
+  html += `<div class="patient-cta"><div style="font-size:16px;font-weight:600;margin-bottom:4px">📞 立即预约</div><div class="cta-phone">13863829919</div><div class="cta-note">${clinic} · ${doctor} · 期待为您服务</div></div>`;
+
+  return html;
+}
+
+function extractPatientKPIs(text, affected) {
+  const kpis = [];
+  // 牙数
+  if (affected.length > 0) {
+    kpis.push({ num: affected.length + '颗', label: '需治疗牙位' });
+  }
+  // 周期：尝试从文本中提取
+  const timeMatch = text.match(/(\d+[～~\-]\d+)\s*个?\s*月/);
+  if (timeMatch) { kpis.push({ num: timeMatch[1], label: '月·治疗周期' }); }
+  else {
+    const m = text.match(/大约?\s*(\d+)\s*个?\s*月/);
+    if (m) kpis.push({ num: m[1], label: '个月·治疗周期' });
+  }
+  // 费用
+  const costMatch = text.match(/总[费计][：:]\s*[约]?\s*(\d[\d,.]*\s*[万wW]?\s*[～~\-]\s*\d[\d,.]*\s*[万wW]?)/i);
+  if (costMatch) { kpis.push({ num: costMatch[1].replace(/\s/g, ''), label: '预估总费用' }); }
+  else {
+    const c2 = text.match(/(\d[\d,.]*\s*[万wW])/);
+    if (c2 && kpis.length < 3) kpis.push({ num: c2[1], label: '预估费用' });
+  }
+  // 就诊次数
+  const visitMatch = text.match(/(\d+)\s*[次趟]/);
+  if (visitMatch && kpis.length < 3) kpis.push({ num: visitMatch[1] + '次', label: '就诊次数' });
+
+  return kpis.slice(0, 3);
+}
+
+function parsePatientSections(text) {
+  const sections = [];
+  const lines = text.split('\n');
+  let current = { title: '诊断概览', type: 'problem', icon: '🔍', text: '', html: '', steps: [], feeItems: [] };
+  const secMap = {
+    '核心结论': { type: 'problem', icon: '🔍' },
+    '您的牙齿问题': { type: 'problem', icon: '🦷' },
+    '您的牙齿情况': { type: 'problem', icon: '🦷' },
+    '您的牙齿': { type: 'problem', icon: '🦷' },
+    '牙齿问题': { type: 'problem', icon: '🦷' },
+    '牙齿情况': { type: 'problem', icon: '🦷' },
+    '诊断结果': { type: 'problem', icon: '🔍' },
+    '问题': { type: 'problem', icon: '🔍' },
+    '治疗流程': { type: 'solution', icon: '💡' },
+    '治疗建议': { type: 'solution', icon: '💡' },
+    '我们的治疗': { type: 'solution', icon: '💡' },
+    '推荐方案': { type: 'solution', icon: '💡' },
+    '治疗方案': { type: 'solution', icon: '💡' },
+    '治疗步骤': { type: 'solution', icon: '💡' },
+    '我们给您的治疗': { type: 'solution', icon: '💡' },
+    '治疗时间': { type: 'timeline', icon: '⏱️' },
+    '治疗时间线': { type: 'timeline', icon: '⏱️' },
+    '治疗周期': { type: 'timeline', icon: '⏱️' },
+    '时间线': { type: 'timeline', icon: '⏱️' },
+    '费用': { type: 'cost', icon: '💰' },
+    '费用说明': { type: 'cost', icon: '💰' },
+    '费用明细': { type: 'cost', icon: '💰' },
+    '价格': { type: 'cost', icon: '💰' },
+    '为什么选择': { type: 'usp', icon: '⭐' },
+    '我们的优势': { type: 'usp', icon: '⭐' },
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    // 检测章节标题
+    let titleMatch = trimmed.match(/^#{1,3}\s*(.+)/);
+    if (!titleMatch) titleMatch = trimmed.match(/^\*\*(.+?)\*\*\s*$/);
+    if (!titleMatch) titleMatch = trimmed.match(/^【(.+?)】\s*$/);
+
+    if (titleMatch) {
+      // 保存上一个section（仅当有实质内容）
+      if (current && current.text.trim()) { finalizeSection(current); sections.push(current); }
+
+      const title = titleMatch[1].replace(/[#*【】]/g, '').trim();
+      let secType = 'solution', secIcon = '💡';
+      for (const [key, val] of Object.entries(secMap)) {
+        if (title.includes(key)) { secType = val.type; secIcon = val.icon; break; }
+      }
+      current = { title, type: secType, icon: secIcon, text: '', html: '', steps: [], feeItems: [] };
+    } else if (current) {
+      current.text += (current.text ? '\n' : '') + trimmed;
+      let h = trimmed
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/^- (.+)/g, '<p>• $1</p>')
+        .replace(/^(\d+)\.\s*(.+)/g, '<p>$1. $2</p>');
+      if (!h.startsWith('<p>') && !h.startsWith('<strong>') && !h.startsWith('<table')) {
+        h = '<p>' + h + '</p>';
+      }
+      current.html += (current.html ? '' : '') + h;
+    }
+  }
+  // 保存最后一个section（仅当有实质内容，且非空intro）
+  if (current && current.text.trim()) {
+    // 如果intro是唯一内容（没有其他section），跳过它——用fallback渲染
+    if (sections.length === 0 && current.title === '诊断概览') {
+      // 纯文本无标题，不加入sections，触发fallback
+    } else {
+      finalizeSection(current); sections.push(current);
+    }
+  }
+
+  return sections;
+}
+
+function finalizeSection(sec) {
+  // 解析治疗步骤为结构化数据
+  if (sec.type === 'solution') {
+    const stepPatterns = [
+      /第[一二三四五六七八九十\d]+[步次][：:]\s*(.+?)(?:[。，,]\s*(.+))?/g,
+      /(\d+)[\.、]\s*(.+?)(?:[。，,]\s*(.+))?/g,
+    ];
+    for (const pat of stepPatterns) {
+      let m;
+      while ((m = pat.exec(sec.text)) !== null) {
+        const title = (m[1] || '').replace(/[：:]/g, '').trim();
+        const desc = (m[2] || '').trim();
+        // 过滤掉太短的碎片（如单字"先""拔"）
+        if (title && title.length >= 3 && title.length < 50) {
+          sec.steps.push({ title, desc: desc || '' });
+        }
+      }
+    }
+    // 如果步骤全是碎片（平均长度<5），回退到普通列表渲染
+    if (sec.steps.length > 0) {
+      const avgLen = sec.steps.reduce((s, st) => s + st.title.length, 0) / sec.steps.length;
+      if (avgLen < 5) sec.steps = [];
+    }
+  }
+  // 解析费用为结构化表格
+  if (sec.type === 'cost') {
+    const feeLines = sec.text.split('\n').filter(l => l.trim());
+    for (const l of feeLines) {
+      const parts = l.split(/[：:]\s*/);
+      if (parts.length >= 2) {
+        const name = parts[0].replace(/^[-•\d.]\s*/, '').trim();
+        const price = parts[1].replace(/[（(].*?[)）]/g, '').trim();
+        if (name && price) sec.feeItems.push({ name, price });
+      }
+    }
+  }
+}
+
+function renderToothDiagramSvg(affectedTeeth) {
+  if (!affectedTeeth || affectedTeeth.length === 0) return '';
+  // FDI牙位，构建上下颌图示
+  const upperRight = [18,17,16,15,14,13,12,11];
+  const upperLeft = [21,22,23,24,25,26,27,28];
+  const lowerRight = [48,47,46,45,44,43,42,41];
+  const lowerLeft = [31,32,33,34,35,36,37,38];
+  const allRows = [
+    { label: '上颌右', teeth: upperRight, y: 40 },
+    { label: '上颌左', teeth: upperLeft, y: 40 },
+    { label: '下颌右', teeth: lowerRight, y: 100 },
+    { label: '下颌左', teeth: lowerLeft, y: 100 },
+  ];
+
+  const cellW = 38, cellH = 38, gap = 2, startX = 10;
+  let svg = '';
+  for (const row of [0,2]) {
+    // 上颌 row 0+1, 下颌 row 2+3
+    for (let side = 0; side < 2; side++) {
+      const r = allRows[row + side];
+      let x = startX + side * (8 * (cellW + gap) + 20);
+      const y = r.y;
+      for (let i = 0; i < 8; i++) {
+        const tooth = r.teeth[i];
+        const isAffected = affectedTeeth.includes(tooth);
+        const fill = isAffected ? '#fecaca' : '#f3f4f6';
+        const stroke = isAffected ? '#dc2626' : '#d1d5db';
+        const textColor = isAffected ? '#991b1b' : '#9ca3af';
+        svg += `<rect x="${x + i * (cellW + gap)}" y="${y}" width="${cellW}" height="${cellH}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="${isAffected ? 2 : 1}"/>\n`;
+        svg += `<text x="${x + i * (cellW + gap) + cellW/2}" y="${y + cellH/2 + 5}" text-anchor="middle" font-size="12" font-weight="${isAffected ? '700' : '400'}" fill="${textColor}" font-family="monospace">${tooth}</text>\n`;
+      }
+    }
+  }
+
+  // 标签
+  svg += `<text x="${startX + 4 * (cellW + gap)}" y="28" text-anchor="middle" font-size="11" fill="#6b7280">上颌（右→左）</text>\n`;
+  svg += `<text x="${startX + 8 * (cellW + gap) + 20 + 4 * (cellW + gap)}" y="28" text-anchor="middle" font-size="11" fill="#6b7280">上颌（左→右）</text>\n`;
+  svg += `<text x="${startX + 4 * (cellW + gap)}" y="160" text-anchor="middle" font-size="11" fill="#6b7280">下颌（右→左）</text>\n`;
+  svg += `<text x="${startX + 8 * (cellW + gap) + 20 + 4 * (cellW + gap)}" y="160" text-anchor="middle" font-size="11" fill="#6b7280">下颌（左→右）</text>\n`;
+
+  // 图例
+  const legendY = 175;
+  svg += `<rect x="${startX}" y="${legendY}" width="14" height="14" rx="3" fill="#fecaca" stroke="#dc2626" stroke-width="2"/>\n`;
+  svg += `<text x="${startX + 20}" y="${legendY + 12}" font-size="11" fill="#991b1b">需治疗牙位</text>\n`;
+
+  const totalW = startX + 8 * (cellW + gap) + 20 + 8 * (cellW + gap);
+  const totalH = 200;
+  return `<div class="tooth-diagram"><svg viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg">${svg}</svg><div class="tooth-tip">红色标注为需治疗牙位（FDI编号）</div></div>`;
+}
+
+// ========== PLAN SAVE ==========
+function compressImageForAPI(dataUrl, maxW, imgType) {
+  // 压缩图片用于发送给AI视觉模型
+  // imgType=2(病历截图): 高分辨率+高质量，保证中文小字可读
+  // imgType=1(影像资料): 标准压缩，全景片/CT不需要极致细节
+  const isRecord = imgType === 2;
+  const finalMaxW = maxW || (isRecord ? 3072 : 2048);
+  const quality = isRecord ? 0.95 : 0.85;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, finalMaxW / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+function compressImageForStorage(dataUrl, maxW) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, maxW / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
+    };
+    img.onerror = () => resolve(dataUrl); // fallback to original
+    img.src = dataUrl;
+  });
+}
+
+async function savePlanRecord(planText, patientText, recordText, affectedTeeth) {
+  const patientName = document.getElementById('planPatient').value.trim() || '未命名';
+  const notes = document.getElementById('planNotes').value.trim();
+
+  // 压缩图片缩略图存储
+  const thumbs = [];
+  for (const img of planImages) {
+    const thumb = await compressImageForStorage(img.preview, 300);
+    thumbs.push({ type: img.type, thumb });
+  }
+
+  const record = {
+    id: Date.now(),
+    type: 'plan',
+    patient: patientName,
+    time: new Date().toLocaleString(),
+    planContent: planText,
+    planPatient: patientText,
+    planRecord: recordText,
+    planAffectedTeeth: affectedTeeth,
+    notes: notes,
+    imageCount: planImages.length,
+    imageThumbs: thumbs,
+  };
+
+  const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+  // 限制方案记录最多保留 20 条（防止localStorage溢出）
+  const planCount = records.filter(r => r.type === 'plan').length;
+  if (planCount >= 20) {
+    // 删除最旧的一条方案记录
+    const oldestPlanIdx = records.reduce((idx, r, i) => r.type === 'plan' && (!idx || r.id < records[idx].id) ? i : idx, null);
+    if (oldestPlanIdx !== null) records.splice(oldestPlanIdx, 1);
+  }
+  records.unshift(record);
+  localStorage.setItem('dr_records_v2', JSON.stringify(records));
+  loadHistory(); // 刷新历史列表
+}
+
+async function generatePlan() {
+  const key = state.settings.visionKey;
+  if (!key) { showToast('请先在设置中填写视觉模型 API Key', 'error'); return; }
+  if (planImages.length === 0) { showToast('请至少上传一张影像资料', 'error'); return; }
+
+  const btn = document.getElementById('planGenBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ AI 分析影像中...';
+  const resultDiv = document.getElementById('planResult');
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div style="color:var(--gy6);font-size:13px;padding:16px">⏳ 正在分析全景片和病历信息，生成医生版+患者版方案，请稍候...</div>';
+
+  try {
+    const notes = document.getElementById('planNotes').value.trim();
+
+    // 压缩图片后再发送给AI（原始data URL太大，千问模型可能截断后续图片）
+    const compressedImages = [];
+    for (const img of planImages) {
+      const compressed = await compressImageForAPI(img.preview, undefined, img.type);
+      compressedImages.push({ type: img.type, url: compressed });
+    }
+
+    const content = [];
+
+    const recordImgs = compressedImages.filter(img => img.type === 2);
+    const scanImgs = compressedImages.filter(img => img.type === 1);
+
+    const imageDescriptions = planImages.map((img, i) =>
+      `[图片${i + 1}] ${img.type === 1 ? '影像资料' : '病历截图'}（${img.file?.name || '已上传'}）`
+    ).join('\n');
+
+    // ══════════ 重构：指令前置，图片后置 ══════════
+    // 先发完整任务说明 → AI 带着目标看图片 → 产出更精准
+
+    // 🧪 极简模式：完全让 AI 自由发挥
+    const promptText = `你是一名口腔科医生。根据上传的病历截图和影像资料，请输出三部分内容，用 "===NEXT_SECTION===" 分隔：
+
+第一部分：给医生的治疗方案
+第二部分：给患者的沟通方案
+第三部分：E看牙电子病历
+
+开始吧。`;
+
+    // ══════════ 发送顺序：任务指令 → 病历截图 → 影像资料 ══════════
+    content.push({ type: 'text', text: promptText });
+
+    if (recordImgs.length > 0) {
+      content.push({ type: 'text', text: '\n\n═══ 以下是' + recordImgs.length + '张E看牙病历截图 ═══\n请逐字阅读以下截图中的所有文字内容（牙位标记、诊断、治疗记录等），这是最高优先级的权威信息：' });
+      for (const img of recordImgs) {
+        content.push({ type: 'image_url', image_url: { url: img.url } });
+      }
+    }
+
+    if (scanImgs.length > 0) {
+      content.push({ type: 'text', text: '\n\n═══ 以下是' + scanImgs.length + '张影像资料 ═══\n请系统分析以下影像中的所有异常发现（不限于病历已提到的牙位）：' });
+      for (const img of scanImgs) {
+        content.push({ type: 'image_url', image_url: { url: img.url } });
+      }
+    }
+
+    const resp = await fetch(state.settings.visionUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({
+        model: state.settings.visionModel,
+        messages: [{ role: 'user', content: content }],
+        max_tokens: 8000,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'API 请求失败（' + resp.status + '）');
+    }
+
+    const data = await resp.json();
+    const fullResult = data.choices?.[0]?.message?.content || '';
+    if (!fullResult || fullResult.trim().length < 50) {
+      throw new Error('AI 返回结果太短，请检查上传的图片是否清晰可读');
+    }
+
+    // 拆分三部分
+    let parts = fullResult.split(/===NEXT_SECTION===/);
+    // 过滤掉纯空白的段（AI可能在开头/中间插入多余分隔符）
+    parts = parts.map(p => p.trim()).filter(p => p.length > 10);
+    console.log('[Plan Debug] 有效分段数:', parts.length, '前50字:', parts.map(p => p.substring(0, 50)));
+    let planText = (parts[0] || '').trim();
+    let patientText = (parts[1] || '').trim();
+    let recordText = (parts[2] || '').trim();
+
+    // 提取受影响牙位
+    const teethMatch = patientText.match(/#AFFECTED_TEETH:\s*(.+)/i);
+    let affectedTeeth = [];
+    if (teethMatch) {
+      const teethStr = teethMatch[1].trim();
+      if (teethStr.toUpperCase() !== 'NONE') {
+        affectedTeeth = teethStr.split(/[,，\s]+/).map(t => parseInt(t)).filter(n => !isNaN(n));
+      }
+      patientText = patientText.replace(/#AFFECTED_TEETH:.*/i, '').trim();
+    }
+
+    // 保存到 state
+    state.planContent = planText;
+    state.planPatient = patientText;
+    state.planRecord = recordText;
+    state.planAffectedTeeth = affectedTeeth;
+
+    // 持久化保存到历史记录
+    await savePlanRecord(planText, patientText, recordText, affectedTeeth);
+
+    // 渲染患者版 HTML
+    const clinic = localStorage.getItem('dr_clinic_v2') || '德仁口腔';
+    const doctor = localStorage.getItem('dr_doctor_v2') || '马医生';
+    const patientHtml = patientText ? renderPatientPlanHtml(clinic, doctor) : '<p style="color:var(--gy5);padding:16px">（AI未生成患者版内容，请重试）</p>';
+
+    // 内容质量检测
+    const planShort = planText.length < 400;
+    const patientShort = patientText.length < 100;
+    const doctorWarn = planShort
+      ? '<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e">⚠️ 医生版方案内容偏短（' + planText.length + '字），建议补充患者情况后再生成，或切换更高性能的视觉模型。</div>'
+      : '';
+    const patientWarn = patientShort
+      ? '<div style="background:#fef2f2;border:1px solid #ef4444;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#991b1b">⚠️ 患者版方案内容不足（' + patientText.length + '字），已使用原始文本渲染。建议重试或补充更多病历信息。</div>'
+      : '';
+
+    // 选项卡显示
+    resultDiv.innerHTML = `
+      <div class="plan-actions">
+        <button class="btn-copy" onclick="copyPlanText()">📋 复制医生版</button>
+        <button class="btn-copy" onclick="copyPlanRecord()">📋 复制E看牙病历</button>
+        <button class="btn-pdf" onclick="generatePatientPdf()">🖨️ 导出患者版PDF</button>
+      </div>
+      <div class="plan-tabs">
+        <button class="plan-tab active" data-ptab="doctor" onclick="switchPlanTab('doctor')">🩺 医生版方案${planShort ? ' ⚠️' : ''}</button>
+        <button class="plan-tab" data-ptab="patient" onclick="switchPlanTab('patient')">👨‍👩‍👧 患者版（促成交）${patientShort ? ' ⚠️' : ''}</button>
+        <button class="plan-tab" data-ptab="record" onclick="switchPlanTab('record')">🦷 E看牙病历</button>
+      </div>
+      <div class="plan-tab-panel active" id="ptab-doctor">
+        ${doctorWarn}
+        <div class="plan-md-body">${mdToHtml(planText)}</div>
+      </div>
+      <div class="plan-tab-panel" id="ptab-patient">
+        ${patientShort ? patientWarn : ''}
+        <div class="patient-plan">${patientHtml}</div>
+      </div>
+      <div class="plan-tab-panel" id="ptab-record">
+        <div class="plan-md-body" style="background:var(--bluel)">${mdToHtml(recordText)}</div>
+      </div>`;
+    showToast('✅ 三版方案已生成', 'success');
+  } catch (e) {
+    showToast('生成失败: ' + e.message, 'error');
+    resultDiv.innerHTML = '<div style="color:var(--red);padding:12px">❌ 生成失败：' + escapeHtml(e.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ 生成治疗方案';
+  }
+}
+
+// ========== MARKDOWN TO HTML ==========
+function mdToHtml(text) {
+  if (!text || !text.trim()) return '<p style="color:var(--gy5);padding:16px">暂无内容</p>';
+  const lines = text.split('\n');
+  let html = '';
+  let inTable = false, inList = false, inNumList = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+
+    // 表格检测
+    const isTableRow = /^\|.+\|$/.test(line.trim());
+    const isTableSep = /^\|[\s:-]+\|$/.test(line.trim());
+
+    if (isTableRow && !isTableSep) {
+      if (!inTable) { html += '<table style="border-collapse:collapse;width:100%;margin:12px 0">'; inTable = true; }
+      const cells = line.split('|').filter(c => c.trim());
+      const isHeader = i + 1 < lines.length && /^\|[\s:-]+\|$/.test((lines[i + 1] || '').trim());
+      const tag = isHeader ? 'th' : 'td';
+      html += '<tr>' + cells.map(c => `<${tag} style="border:1px solid var(--gy3);padding:8px 12px;text-align:left;${isHeader ? 'background:var(--gy2);font-weight:600' : ''}">${inlineMd(c.trim())}</${tag}>`).join('') + '</tr>';
+      continue;
+    }
+    if (isTableSep) {
+      continue; // 跳过分隔行
+    }
+    if (inTable) { html += '</table>'; inTable = false; }
+
+    // 标题
+    let m = line.match(/^#{2,4}\s+(.+)/);
+    if (m) {
+      if (inList) { html += '</ul>'; inList = false; }
+      if (inNumList) { html += '</ol>'; inNumList = false; }
+      const level = Math.min(6, line.match(/^#+/)[0].length + 1);
+      html += `<h${level} style="font-size:${level === 3 ? 18 : level === 4 ? 16 : 15}px;font-weight:700;margin:18px 0 10px;color:var(--gy9)">${inlineMd(m[1])}</h${level}>`;
+      continue;
+    }
+
+    // 分隔线
+    if (/^---+$/.test(line.trim())) {
+      if (inList) { html += '</ul>'; inList = false; }
+      if (inNumList) { html += '</ol>'; inNumList = false; }
+      html += '<hr style="border:none;border-top:1px solid var(--gy3);margin:16px 0">';
+      continue;
+    }
+
+    // 无序列表
+    m = line.match(/^[\-\*]\s+(.+)/);
+    if (m) {
+      if (inNumList) { html += '</ol>'; inNumList = false; }
+      if (!inList) { html += '<ul style="margin:8px 0;padding-left:20px">'; inList = true; }
+      html += `<li style="margin:3px 0;line-height:1.8">${inlineMd(m[1])}</li>`;
+      continue;
+    }
+
+    // 有序列表
+    m = line.match(/^\d+\.\s+(.+)/);
+    if (m) {
+      if (inList) { html += '</ul>'; inList = false; }
+      if (!inNumList) { html += '<ol style="margin:8px 0;padding-left:20px">'; inNumList = true; }
+      html += `<li style="margin:3px 0;line-height:1.8">${inlineMd(m[1])}</li>`;
+      continue;
+    }
+
+    // 普通段落
+    if (inList) { html += '</ul>'; inList = false; }
+    if (inNumList) { html += '</ol>'; inNumList = false; }
+
+    const trimmed = line.trim();
+    if (!trimmed) {
+      html += '<br>';
+      continue;
+    }
+
+    // 【标签】格式
+    m = trimmed.match(/^【(.+?)】\s*(.*)/);
+    if (m) {
+      html += `<p style="margin:12px 0 6px"><strong style="color:var(--blue);font-size:15px">【${inlineMd(m[1])}】</strong>${m[2] ? ' ' + inlineMd(m[2]) : ''}</p>`;
+      continue;
+    }
+
+    html += `<p style="margin:4px 0;line-height:1.9">${inlineMd(trimmed)}</p>`;
+  }
+
+  if (inTable) html += '</table>';
+  if (inList) html += '</ul>';
+  if (inNumList) html += '</ol>';
+
+  return html || '<p style="color:var(--gy5);padding:16px">暂无内容</p>';
+}
+
+function inlineMd(text) {
+  return escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+// ========== UTILS ==========
+function fmtTime(s) {
+  const m = Math.floor(s / 60); const sec = s % 60;
+  return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showToast(msg, type) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+</script>
+</body>
+</html>

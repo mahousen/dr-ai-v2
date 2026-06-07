@@ -1,0 +1,11 @@
+node_modules/
+.workbuddy/
+audacity-installer.exe
+server-debug.log
+nul
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+录音文件/
+uploads/

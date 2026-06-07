@@ -1,0 +1,12 @@
+{
+  "name": "dr-ai-v2",
+  "version": "2.0.0",
+  "description": "德仁口腔 AI 病历助手 v2",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
+  }
+}
