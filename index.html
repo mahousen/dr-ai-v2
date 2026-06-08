@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>德仁口腔 · AI病历助手 v2.0.20260608a</title>
+<title>德仁口腔 · AI病历助手 v2.0.20260608b</title>
 <style>.upd-bar{position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px 40px 6px 12px;font-size:13px;z-index:99999}.upd-bar .x{position:absolute;right:8px;top:4px;font-size:18px;cursor:pointer;opacity:.7}.upd-bar .x:hover{opacity:1}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <style>
@@ -3026,6 +3026,8 @@ async function generatePlan() {
       const err = await resp.json().catch(() => ({}));
       throw new Error(err.error?.message || 'API 请求失败（' + resp.status + '）');
     }
+
+    const data = await resp.json();
 
     // 拆分：先分离 RECOMMEND，再按 PLAN_ 标记解析多方案
     const fullResult = data.choices?.[0]?.message?.content || '';
