@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>德仁口腔 · AI病历助手 v2.0.20260608b</title>
+<title>德仁口腔 · AI病历助手 v2.0.20260608c</title>
 <style>.upd-bar{position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px 40px 6px 12px;font-size:13px;z-index:99999}.upd-bar .x{position:absolute;right:8px;top:4px;font-size:18px;cursor:pointer;opacity:.7}.upd-bar .x:hover{opacity:1}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <style>
@@ -198,6 +198,10 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
 .patient-cta{text-align:center;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;padding:22px 20px;border-radius:10px;margin-top:12px;box-shadow:0 2px 8px rgba(30,64,175,.25)}
 .patient-cta .cta-phone{font-size:26px;font-weight:800;letter-spacing:1px}
 .patient-cta .cta-note{font-size:12px;opacity:.8;margin-top:4px}
+/* 科普知识 */
+.science-box{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac;border-radius:12px;padding:18px 22px;margin:16px 0;page-break-inside:avoid}
+.science-box .science-title{font-size:15px;font-weight:800;color:#166534;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.science-box .science-body{font-size:13px;line-height:1.9;color:#14532d}
 /* Tooth diagram SVG */
 
 /* ===== 方案对比卡片（新设计） ===== */
@@ -2985,6 +2989,9 @@ async function generatePlan() {
 ---PLAN_C---
 （可选，有更好的方案就加上）
 
+---SCIENCE---
+根据以上病例，写一段口腔健康科普知识（200-300字），用通俗语言，让患者了解自己的口腔问题、成因、以及日常护理要点。
+
 ---RECOMMEND---
 推荐方案：方案X
 理由：为什么推荐这个（2-3句话，患者能理解的通俗理由）
@@ -3035,11 +3042,22 @@ async function generatePlan() {
       throw new Error('AI 返回结果太短，请检查上传的图片是否清晰可读');
     }
 
-    // 提取推荐部分
+    // 先分离 SCIENCE 和 RECOMMEND
+    let scienceText = '';
     let recommendText = '';
     let planSection = fullResult;
+    const sciIdx = fullResult.indexOf('---SCIENCE---');
     const recIdx = fullResult.indexOf('---RECOMMEND---');
-    if (recIdx >= 0) {
+
+    if (sciIdx >= 0) {
+      planSection = fullResult.substring(0, sciIdx).trim();
+      if (recIdx > sciIdx) {
+        scienceText = fullResult.substring(sciIdx + '---SCIENCE---'.length, recIdx).trim();
+        recommendText = fullResult.substring(recIdx + '---RECOMMEND---'.length).trim();
+      } else {
+        scienceText = fullResult.substring(sciIdx + '---SCIENCE---'.length).trim();
+      }
+    } else if (recIdx >= 0) {
       planSection = fullResult.substring(0, recIdx).trim();
       recommendText = fullResult.substring(recIdx + '---RECOMMEND---'.length).trim();
     }
@@ -3061,9 +3079,9 @@ async function generatePlan() {
     // 保存到 state
     state.planContent = planSection; // 原始文本
     state.planPatient = planSection;
-    state.planRecord = ''; // 第二封请求获取
+    state.planRecord = '';
     state.planAffectedTeeth = affectedTeeth;
-    state.planMulti = { plans, recommend, affectedTeeth };
+    state.planMulti = { plans, recommend, affectedTeeth, science: scienceText };
 
     // 持久化
     await savePlanRecord(planSection, planSection, '', affectedTeeth);
@@ -3071,7 +3089,7 @@ async function generatePlan() {
     // 渲染患者版 HTML
     const clinic = localStorage.getItem('dr_clinic_v2') || '德仁口腔';
     const doctor = localStorage.getItem('dr_doctor_v2') || '马医生';
-    const compareHtml = renderCompareView(plans, recommend, clinic, doctor);
+    const compareHtml = renderCompareView(plans, recommend, clinic, doctor, scienceText);
 
     // 渲染医生版（原始文本）
     const planHtml = planSection ? mdToHtml(planSection) : '<p style="color:var(--gy5);padding:16px">（AI未生成方案内容，请重试）</p>';
@@ -3169,7 +3187,7 @@ function parseRecommend(text) {
   };
 }
 
-function renderCompareView(plans, recommend, clinic, doctor) {
+function renderCompareView(plans, recommend, clinic, doctor, science) {
   if (!plans || plans.length === 0) {
     return '<p style="color:var(--gy5);text-align:center;padding:32px">暂无方案内容</p>';
   }
@@ -3231,6 +3249,11 @@ function renderCompareView(plans, recommend, clinic, doctor) {
   }
   html += `</div>`;
 
+  // 科普知识
+  if (science && science.trim()) {
+    html += `<div class="science-box"><div class="science-title">📚 口腔健康科普</div><div class="science-body">${science.replace(/\n/g, '<br>')}</div></div>`;
+  }
+
   // CTA
   html += `<div class="patient-cta"><div style="font-size:16px;font-weight:600;margin-bottom:4px">📞 立即预约</div><div class="cta-phone">13863829919</div><div class="cta-note">${clinic} · ${doctor} · 期待为您服务</div></div>`;
 
@@ -3243,7 +3266,7 @@ function generateComparePdf() {
   const w = window.open('', '_blank', 'width=900,height=700');
   const clinic = localStorage.getItem('dr_clinic_v2') || '德仁口腔';
   const doctor = localStorage.getItem('dr_doctor_v2') || '马医生';
-  const bodyHtml = renderCompareView(mp.plans, mp.recommend, clinic, doctor);
+  const bodyHtml = renderCompareView(mp.plans, mp.recommend, clinic, doctor, mp.science);
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>治疗方案 - 多方案对比</title>
 <style>${pdfStyles()}</style></head><body>
 ${bodyHtml}
@@ -3256,40 +3279,48 @@ ${bodyHtml}
 function pdfStyles() {
   return `
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:#333;max-width:780px;margin:0 auto;padding:24px}
-.patient-hero{text-align:center;padding:24px 20px;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;border-radius:12px;margin-bottom:16px}
-.patient-hero h2{font-size:20px;font-weight:700;margin:0 0 4px}
-.patient-hero .sub{font-size:13px;opacity:.85}
-.recommend-box{background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;gap:12px;align-items:center}
-.recommend-box .rec-icon{font-size:28px}
-.recommend-box .rec-text{font-size:14px;line-height:1.7}
-.compare-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px;border-radius:8px;overflow:hidden}
-.compare-table th{background:#f9fafb;padding:10px 14px;font-weight:700;text-align:center;border:1px solid #e5e7eb}
-.compare-table td{padding:10px 14px;text-align:center;border:1px solid #e5e7eb}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:#333;max-width:800px;margin:0 auto;padding:20px;font-size:13px}
+.patient-hero{text-align:center;padding:28px 24px;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;border-radius:14px;margin-bottom:18px;page-break-inside:avoid}
+.patient-hero h2{font-size:22px;font-weight:700;margin:0 0 6px}
+.patient-hero .sub{font-size:14px;opacity:.85}
+.recommend-box{background:#eff6ff;border:1px solid #93c5fd;border-radius:12px;padding:16px 20px;margin-bottom:18px;display:flex;gap:14px;align-items:center;page-break-inside:avoid}
+.recommend-box .rec-icon{font-size:30px;flex-shrink:0}
+.recommend-box .rec-text{font-size:14px;line-height:1.8}
+.recommend-box .rec-text strong{color:#1e40af;font-size:16px}
+.compare-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:18px;border-radius:10px;overflow:hidden;page-break-inside:avoid}
+.compare-table th{background:#f3f4f6;padding:10px 14px;font-weight:700;text-align:center;border:1px solid #d1d5db;font-size:13px}
+.compare-table td{padding:10px 14px;text-align:center;border:1px solid #e5e7eb;background:#fff;font-size:13px}
+.compare-table .col-plan{text-align:left;font-weight:600}
 .compare-table .highlight{background:#eff6ff;color:#1e40af;font-weight:700}
-.compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
-.plan-option{border-radius:12px;overflow:hidden;background:#fff;border:2px solid #e5e7eb}
-.plan-option.recommended{border-color:#2563eb;box-shadow:0 2px 12px rgba(37,99,235,.15)}
-.plan-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin:10px 0 4px 14px}
+.compare-grid{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:18px}
+.plan-option{flex:1 1 230px;min-width:210px;max-width:340px;border-radius:14px;overflow:hidden;background:#fff;border:2px solid #e5e7eb;page-break-inside:avoid}
+.plan-option.recommended{border-color:#2563eb;box-shadow:0 2px 16px rgba(37,99,235,.12)}
+.plan-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;margin:10px 0 4px 14px}
 .plan-badge.basic{background:#f0fdf4;color:#166534}
 .plan-badge.standard{background:#eff6ff;color:#1e40af}
 .plan-badge.premium{background:#faf5ff;color:#6b21a8}
 .plan-badge.recommend{background:#fef3c7;color:#b45309}
-.plan-header{text-align:center;padding:12px 14px 8px}
-.plan-header .plan-name{font-size:16px;font-weight:800}
-.plan-header .plan-price{font-size:22px;font-weight:900;color:#2563eb;margin:4px 0}
+.plan-header{text-align:center;padding:14px 16px 10px;page-break-inside:avoid}
+.plan-header .plan-name{font-size:17px;font-weight:800}
+.plan-header .plan-price{font-size:24px;font-weight:900;color:#2563eb;margin:6px 0}
 .plan-header .plan-duration{font-size:12px;color:#666}
-.plan-body{padding:12px 14px}
+.plan-body{padding:10px 16px 14px}
 .plan-section{margin-bottom:10px}
-.ps-title{font-size:12px;font-weight:700;margin-bottom:3px;color:#666}
-.ps-list{list-style:none;padding:0;font-size:12px;line-height:1.7}
-.ps-pros li::before{content:'✓ ';color:#16a34a}
-.ps-cons li::before{content:'- ';color:#f59e0b}
-.patient-cta{text-align:center;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;padding:18px 20px;border-radius:10px;margin-top:12px}
-.patient-cta .cta-phone{font-size:22px;font-weight:800;letter-spacing:1px}
-.patient-cta .cta-note{font-size:11px;opacity:.8;margin-top:3px}
-.footer{text-align:center;color:#999;font-size:10px;margin-top:20px;border-top:1px solid #eee;padding-top:14px}
-@media print{body{padding:16px}}
+.ps-title{font-size:12px;font-weight:700;margin-bottom:4px;color:#555}
+.ps-list{list-style:none;padding:0;font-size:12px;line-height:1.8}
+.ps-pros li::before{content:'✓ ';color:#16a34a;font-weight:700}
+.ps-cons li::before{content:'— ';color:#f59e0b}
+.science-box{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac;border-radius:12px;padding:18px 22px;margin:18px 0;page-break-inside:avoid}
+.science-box .science-title{font-size:16px;font-weight:800;color:#166534;margin-bottom:10px}
+.science-box .science-body{font-size:13px;line-height:1.9;color:#14532d}
+.patient-cta{text-align:center;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;padding:20px 24px;border-radius:12px;margin-top:14px;page-break-inside:avoid}
+.patient-cta .cta-phone{font-size:24px;font-weight:800;letter-spacing:1px}
+.patient-cta .cta-note{font-size:12px;opacity:.8;margin-top:4px}
+.footer{text-align:center;color:#999;font-size:10px;margin-top:22px;border-top:1px solid #eee;padding-top:16px;page-break-inside:avoid}
+@media print{
+  body{padding:12px 16px;font-size:12px}
+  @page{margin:12mm}
+}
   `.trim();
 }
 
