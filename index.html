@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>德仁口腔 · AI病历助手 v2.0.20260607e</title>
+<title>德仁口腔 · AI病历助手 v2.0.20260608a</title>
 <style>.upd-bar{position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px 40px 6px 12px;font-size:13px;z-index:99999}.upd-bar .x{position:absolute;right:8px;top:4px;font-size:18px;cursor:pointer;opacity:.7}.upd-bar .x:hover{opacity:1}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <style>
@@ -199,6 +199,43 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
 .patient-cta .cta-phone{font-size:26px;font-weight:800;letter-spacing:1px}
 .patient-cta .cta-note{font-size:12px;opacity:.8;margin-top:4px}
 /* Tooth diagram SVG */
+
+/* ===== 方案对比卡片（新设计） ===== */
+.compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:20px}
+.plan-option{border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.07);transition:transform .2s,box-shadow .2s;position:relative;border:2px solid transparent}
+.plan-option:hover{transform:translateY(-3px);box-shadow:0 6px 24px rgba(0,0,0,.12)}
+.plan-option.recommended{border-color:var(--blue);box-shadow:0 2px 20px rgba(37,99,235,.18);transform:scale(1.02)}
+.plan-option.recommended:hover{transform:scale(1.02) translateY(-2px)}
+.plan-badge{position:absolute;top:10px;right:10px;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;letter-spacing:.5px}
+.plan-badge.basic{background:#f0fdf4;color:#166534}
+.plan-badge.standard{background:#eff6ff;color:#1e40af}
+.plan-badge.premium{background:#faf5ff;color:#6b21a8}
+.plan-badge.recommend{background:#fef3c7;color:#b45309}
+.plan-header{text-align:center;padding:18px 14px 12px}
+.plan-option.recommended .plan-header{background:linear-gradient(135deg,#eef2ff,#dbeafe)}
+.plan-header .plan-name{font-size:17px;font-weight:800;color:var(--gy9)}
+.plan-header .plan-price{font-size:26px;font-weight:900;color:var(--blue);margin:6px 0 0}
+.plan-header .plan-duration{font-size:12px;color:var(--gy5);margin-top:2px}
+.plan-body{padding:14px 16px}
+.plan-section{margin-bottom:12px}
+.plan-section .ps-title{font-size:12px;font-weight:700;margin-bottom:4px;color:var(--gy6);text-transform:uppercase;letter-spacing:.5px}
+.plan-section .ps-list{list-style:none;padding:0;font-size:13px;line-height:1.8;color:var(--gy7)}
+.plan-section .ps-list li{padding:2px 0 2px 16px;position:relative}
+.plan-section.ps-pros li::before{content:'✓';position:absolute;left:0;color:#16a34a;font-weight:700;font-size:11px}
+.plan-section.ps-cons li::before{content:'—';position:absolute;left:0;color:var(--gy4);font-size:11px}
+.plan-section.ps-steps li{counter-increment:step;padding-left:20px}
+.plan-section.ps-steps li::before{content:counter(step);position:absolute;left:0;color:var(--blue);font-weight:700;font-size:12px}
+.ps-steps{counter-reset:step}
+.plan-footer{padding:10px 16px;text-align:center;border-top:1px solid var(--gy3);font-size:12px}
+.compare-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px;border-radius:10px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+.compare-table th{background:var(--gy2);padding:10px 14px;font-weight:700;text-align:center}
+.compare-table td{padding:10px 14px;text-align:center;border-bottom:1px solid var(--gy3);background:#fff}
+.compare-table .col-plan{text-align:left;font-weight:600}
+.compare-table .highlight{background:#eff6ff;color:var(--blue);font-weight:700}
+.recommend-box{background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:14px}
+.recommend-box .rec-icon{font-size:32px;flex-shrink:0}
+.recommend-box .rec-text{flex:1;font-size:14px;line-height:1.7;color:var(--gy8)}
+.recommend-box .rec-plan{font-weight:800;color:var(--blue);font-size:16px}
 .tooth-diagram{padding:12px 12px 4px;text-align:center;overflow-x:auto}
 .tooth-diagram svg{max-width:100%}
 .tooth-tip{font-size:11px;color:var(--gy5);text-align:center;margin-top:4px}
@@ -793,6 +830,7 @@ try {
     planPatient: '',
     planRecord: '',
     planAffectedTeeth: [],
+    planMulti: null,
     records: [],
     // 实时转写
     sttWs: null,
@@ -2919,19 +2957,45 @@ async function generatePlan() {
       `[图片${i + 1}] ${img.type === 1 ? '影像资料' : '病历截图'}（${img.file?.name || '已上传'}）`
     ).join('\n');
 
-    // ══════════ 重构：指令前置，图片后置 ══════════
-    // 先发完整任务说明 → AI 带着目标看图片 → 产出更精准
+    // ══════════ 极简模式：让 AI 生成多方案对比 ══════════
+    const promptText = `你是一名资深口腔医生。根据上传的病历截图和影像资料，输出患者能看懂的多方案治疗对比。
 
-    // 🧪 极简模式：完全让 AI 自由发挥
-    const promptText = `你是一名口腔科医生。根据上传的病历截图和影像资料，请输出三部分内容，用 "===NEXT_SECTION===" 分隔：
+格式要求（严格按以下标记输出）：
 
-第一部分：给医生的治疗方案
-第二部分：给患者的沟通方案
-第三部分：E看牙电子病历
+---PLAN_A---
+名称：方案A名称（如"基础修复方案"）
+标签：基础方案  （取一个：基础方案 / 标准方案 / 高端方案 / 尊享方案）
+费用：xxxx元（尽量给区间如8000-12000元）
+周期：x周/x个月
+优点：
+· 优点1（一句话，患者能看懂）
+· 优点2
+缺点：
+· 缺点1
+· 缺点2
+步骤：
+1. 第一步
+2. 第二步
+3. ...
 
-开始吧。`;
+---PLAN_B---
+（同上格式，第二个方案）
+...
 
-    // ══════════ 发送顺序：任务指令 → 病历截图 → 影像资料 ══════════
+---PLAN_C---
+（可选，有更好的方案就加上）
+
+---RECOMMEND---
+推荐方案：方案X
+理由：为什么推荐这个（2-3句话，患者能理解的通俗理由）
+
+注意：
+- 至少输出2个方案，最好3个
+- 费用用元，不要用"万"
+- 语言通俗，患者能看懂
+- 不要用专业术语，用"牙冠"代替"全冠修复"这类
+- 优点和缺点各列2-4条`;
+
     content.push({ type: 'text', text: promptText });
 
     if (recordImgs.length > 0) {
@@ -2963,80 +3027,70 @@ async function generatePlan() {
       throw new Error(err.error?.message || 'API 请求失败（' + resp.status + '）');
     }
 
-    const data = await resp.json();
+    // 拆分：先分离 RECOMMEND，再按 PLAN_ 标记解析多方案
     const fullResult = data.choices?.[0]?.message?.content || '';
     if (!fullResult || fullResult.trim().length < 50) {
       throw new Error('AI 返回结果太短，请检查上传的图片是否清晰可读');
     }
 
-    // 拆分三部分
-    let parts = fullResult.split(/===NEXT_SECTION===/);
-    // 过滤掉纯空白的段（AI可能在开头/中间插入多余分隔符）
-    parts = parts.map(p => p.trim()).filter(p => p.length > 10);
-    console.log('[Plan Debug] 有效分段数:', parts.length, '前50字:', parts.map(p => p.substring(0, 50)));
-    let planText = (parts[0] || '').trim();
-    let patientText = (parts[1] || '').trim();
-    let recordText = (parts[2] || '').trim();
+    // 提取推荐部分
+    let recommendText = '';
+    let planSection = fullResult;
+    const recIdx = fullResult.indexOf('---RECOMMEND---');
+    if (recIdx >= 0) {
+      planSection = fullResult.substring(0, recIdx).trim();
+      recommendText = fullResult.substring(recIdx + '---RECOMMEND---'.length).trim();
+    }
 
-    // 提取受影响牙位
-    const teethMatch = patientText.match(/#AFFECTED_TEETH:\s*(.+)/i);
+    // 解析多方案
+    const plans = parseMultiPlans(planSection);
+    const recommend = parseRecommend(recommendText);
+
+    // 提取受影响牙位（从方案文本中）
     let affectedTeeth = [];
+    const teethMatch = planSection.match(/#AFFECTED_TEETH:\s*(.+)/i);
     if (teethMatch) {
       const teethStr = teethMatch[1].trim();
       if (teethStr.toUpperCase() !== 'NONE') {
         affectedTeeth = teethStr.split(/[,，\s]+/).map(t => parseInt(t)).filter(n => !isNaN(n));
       }
-      patientText = patientText.replace(/#AFFECTED_TEETH:.*/i, '').trim();
     }
 
     // 保存到 state
-    state.planContent = planText;
-    state.planPatient = patientText;
-    state.planRecord = recordText;
+    state.planContent = planSection; // 原始文本
+    state.planPatient = planSection;
+    state.planRecord = ''; // 第二封请求获取
     state.planAffectedTeeth = affectedTeeth;
+    state.planMulti = { plans, recommend, affectedTeeth };
 
-    // 持久化保存到历史记录
-    await savePlanRecord(planText, patientText, recordText, affectedTeeth);
+    // 持久化
+    await savePlanRecord(planSection, planSection, '', affectedTeeth);
 
     // 渲染患者版 HTML
     const clinic = localStorage.getItem('dr_clinic_v2') || '德仁口腔';
     const doctor = localStorage.getItem('dr_doctor_v2') || '马医生';
-    const patientHtml = patientText ? renderPatientPlanHtml(clinic, doctor) : '<p style="color:var(--gy5);padding:16px">（AI未生成患者版内容，请重试）</p>';
+    const compareHtml = renderCompareView(plans, recommend, clinic, doctor);
 
-    // 内容质量检测
-    const planShort = planText.length < 400;
-    const patientShort = patientText.length < 100;
-    const doctorWarn = planShort
-      ? '<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e">⚠️ 医生版方案内容偏短（' + planText.length + '字），建议补充患者情况后再生成，或切换更高性能的视觉模型。</div>'
-      : '';
-    const patientWarn = patientShort
-      ? '<div style="background:#fef2f2;border:1px solid #ef4444;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#991b1b">⚠️ 患者版方案内容不足（' + patientText.length + '字），已使用原始文本渲染。建议重试或补充更多病历信息。</div>'
-      : '';
+    // 渲染医生版（原始文本）
+    const planHtml = planSection ? mdToHtml(planSection) : '<p style="color:var(--gy5);padding:16px">（AI未生成方案内容，请重试）</p>';
 
     // 选项卡显示
     resultDiv.innerHTML = `
       <div class="plan-actions">
-        <button class="btn-copy" onclick="copyPlanText()">📋 复制医生版</button>
-        <button class="btn-copy" onclick="copyPlanRecord()">📋 复制E看牙病历</button>
-        <button class="btn-pdf" onclick="generatePatientPdf()">🖨️ 导出患者版PDF</button>
+        <button class="btn-copy" onclick="copyPlanText()">📋 复制原始文本</button>
+        <button class="btn-pdf" onclick="generateComparePdf()">🖨️ 导出患者版PDF</button>
       </div>
       <div class="plan-tabs">
-        <button class="plan-tab active" data-ptab="doctor" onclick="switchPlanTab('doctor')">🩺 医生版方案${planShort ? ' ⚠️' : ''}</button>
-        <button class="plan-tab" data-ptab="patient" onclick="switchPlanTab('patient')">👨‍👩‍👧 患者版（促成交）${patientShort ? ' ⚠️' : ''}</button>
-        <button class="plan-tab" data-ptab="record" onclick="switchPlanTab('record')">🦷 E看牙病历</button>
+        <button class="plan-tab active" data-ptab="patient" onclick="switchPlanTab('patient')">👨‍👩‍👧 患者版（多方案对比）</button>
+        <button class="plan-tab" data-ptab="doctor" onclick="switchPlanTab('doctor')">🩺 医生版原始文本</button>
       </div>
-      <div class="plan-tab-panel active" id="ptab-doctor">
-        ${doctorWarn}
-        <div class="plan-md-body">${mdToHtml(planText)}</div>
+      <div class="plan-tab-panel active" id="ptab-patient">
+        <div class="patient-plan">${compareHtml}</div>
       </div>
-      <div class="plan-tab-panel" id="ptab-patient">
-        ${patientShort ? patientWarn : ''}
-        <div class="patient-plan">${patientHtml}</div>
-      </div>
-      <div class="plan-tab-panel" id="ptab-record">
-        <div class="plan-md-body" style="background:var(--bluel)">${mdToHtml(recordText)}</div>
+      <div class="plan-tab-panel" id="ptab-doctor">
+        <div class="plan-md-body">${planHtml}</div>
       </div>`;
-    showToast('✅ 三版方案已生成', 'success');
+    showToast('✅ 多方案已生成', 'success');
   } catch (e) {
     showToast('生成失败: ' + e.message, 'error');
     resultDiv.innerHTML = '<div style="color:var(--red);padding:12px">❌ 生成失败：' + escapeHtml(e.message) + '</div>';
@@ -3044,6 +3098,197 @@ async function generatePlan() {
     btn.disabled = false;
     btn.textContent = '✨ 生成治疗方案';
   }
+}
+
+// ========== 多方案解析与渲染 ==========
+function parseMultiPlans(text) {
+  const plans = [];
+  const blocks = text.split(/---PLAN_[A-Z]---/).filter(b => b.trim());
+  for (const block of blocks) {
+    const plan = parsePlanBlock(block.trim());
+    if (plan && plan.name) plans.push(plan);
+  }
+
+  // 自动标记推荐（如果没有显式标记）
+  if (plans.length >= 2) {
+    const labels = plans.map(p => p.label || '');
+    if (!labels.some(l => l.includes('推荐'))) {
+      // 中间那个方案默认标记为推荐
+      const mid = Math.floor(plans.length / 2);
+      plans[mid].recommended = true;
+      plans[mid].label += ' （推荐）';
+    }
+  }
+
+  return plans;
+}
+
+function parsePlanBlock(block) {
+  const plan = { name: '', label: '标准方案', price: '', duration: '', pros: [], cons: [], steps: [], recommended: false };
+  const lines = block.split('\n');
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+
+    if (t.startsWith('名称：') || t.startsWith('名称:')) {
+      plan.name = t.replace(/^名称[：:]\s*/, '');
+    } else if (t.startsWith('标签：') || t.startsWith('标签:')) {
+      plan.label = t.replace(/^标签[：:]\s*/, '');
+      if (plan.label.includes('推荐')) plan.recommended = true;
+    } else if (t.startsWith('费用：') || t.startsWith('费用:')) {
+      plan.price = t.replace(/^费用[：:]\s*/, '');
+    } else if (t.startsWith('周期：') || t.startsWith('周期:')) {
+      plan.duration = t.replace(/^周期[：:]\s*/, '');
+    } else if (t.startsWith('优点') || t.startsWith('✅') || t.startsWith('优势')) {
+      plan.currentSection = 'pros';
+    } else if (t.startsWith('缺点') || t.startsWith('❌') || t.startsWith('不足') || t.startsWith('劣势')) {
+      plan.currentSection = 'cons';
+    } else if (t.startsWith('步骤') || t.startsWith('流程') || t.startsWith('过程')) {
+      plan.currentSection = 'steps';
+    } else if (t.startsWith('·') || t.startsWith('•') || t.startsWith('-') || t.match(/^\d+[.、]/)) {
+      const content = t.replace(/^[·•\-\d]+[.、\s]*/, '').trim();
+      if (plan.currentSection === 'pros') plan.pros.push(content);
+      else if (plan.currentSection === 'cons') plan.cons.push(content);
+      else if (plan.currentSection === 'steps') plan.steps.push(content);
+    }
+  }
+
+  return plan.name ? plan : null;
+}
+
+function parseRecommend(text) {
+  if (!text || !text.trim()) return { plan: '', reason: '' };
+  const planMatch = text.match(/推荐方案[：:]\s*(.+)/);
+  const reasonMatch = text.match(/理[由因][：:]\s*([\s\S]+)/);
+  return {
+    plan: planMatch ? planMatch[1].trim() : '',
+    reason: reasonMatch ? reasonMatch[1].trim() : ''
+  };
+}
+
+function renderCompareView(plans, recommend, clinic, doctor) {
+  if (!plans || plans.length === 0) {
+    return '<p style="color:var(--gy5);text-align:center;padding:32px">暂无方案内容</p>';
+  }
+
+  let html = '';
+
+  // 顶部标题
+  html += `<div class="patient-hero"><h2>🦷 您的专属治疗方案</h2><div class="sub">${clinic} · ${doctor} · 多方案对比</div></div>`;
+
+  // 推荐语
+  if (recommend && recommend.plan) {
+    html += `<div class="recommend-box"><div class="rec-icon">💡</div><div class="rec-text"><strong style="color:var(--blue)">医生推荐：${recommend.plan}</strong><br>${recommend.reason}</div></div>`;
+  }
+
+  // 对比表格（3列：方案 / 费用 / 周期）
+  if (plans.length >= 2) {
+    html += `<table class="compare-table"><thead><tr><th style="width:30%">方案</th><th>费用</th><th>治疗周期</th></tr></thead><tbody>`;
+    for (const p of plans) {
+      const cls = p.recommended ? 'highlight' : '';
+      html += `<tr><td class="col-plan${p.recommended ? ' highlight' : ''}">${p.recommended ? '⭐ ' : ''}${p.name}</td><td class="${cls}">${p.price || '-'}</td><td class="${cls}">${p.duration || '-'}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+
+  // 方案卡片
+  html += `<div class="compare-grid">`;
+  for (const p of plans) {
+    const badgeCls = p.recommended ? 'recommend' :
+                     (p.label.includes('基础') || p.label.includes('经济') ? 'basic' :
+                      p.label.includes('高端') || p.label.includes('尊享') ? 'premium' : 'standard');
+    const recCls = p.recommended ? ' recommended' : '';
+
+    html += `<div class="plan-option${recCls}">`;
+    html += `<span class="plan-badge ${badgeCls}">${p.label}</span>`;
+    html += `<div class="plan-header"><div class="plan-name">${p.name}</div>`;
+    html += `<div class="plan-price">${p.price || '面议'}</div>`;
+    html += `<div class="plan-duration">⏱ ${p.duration || '面诊确定'}</div></div>`;
+    html += `<div class="plan-body">`;
+
+    if (p.pros.length > 0) {
+      html += `<div class="plan-section ps-pros"><div class="ps-title">✅ 优势</div><ul class="ps-list">`;
+      for (const pro of p.pros) html += `<li>${pro}</li>`;
+      html += `</ul></div>`;
+    }
+
+    if (p.cons.length > 0) {
+      html += `<div class="plan-section ps-cons"><div class="ps-title">⚠️ 注意事项</div><ul class="ps-list">`;
+      for (const con of p.cons) html += `<li>${con}</li>`;
+      html += `</ul></div>`;
+    }
+
+    if (p.steps.length > 0) {
+      html += `<div class="plan-section ps-steps"><div class="ps-title">📋 治疗步骤</div><ol class="ps-list">`;
+      for (const step of p.steps) html += `<li>${step}</li>`;
+      html += `</ol></div>`;
+    }
+
+    html += `</div></div>`;
+  }
+  html += `</div>`;
+
+  // CTA
+  html += `<div class="patient-cta"><div style="font-size:16px;font-weight:600;margin-bottom:4px">📞 立即预约</div><div class="cta-phone">13863829919</div><div class="cta-note">${clinic} · ${doctor} · 期待为您服务</div></div>`;
+
+  return html;
+}
+
+function generateComparePdf() {
+  const mp = state.planMulti;
+  if (!mp || !mp.plans || mp.plans.length === 0) { showToast('暂无方案内容', 'error'); return; }
+  const w = window.open('', '_blank', 'width=900,height=700');
+  const clinic = localStorage.getItem('dr_clinic_v2') || '德仁口腔';
+  const doctor = localStorage.getItem('dr_doctor_v2') || '马医生';
+  const bodyHtml = renderCompareView(mp.plans, mp.recommend, clinic, doctor);
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>治疗方案 - 多方案对比</title>
+<style>${pdfStyles()}</style></head><body>
+${bodyHtml}
+<div class="footer">本方案由德仁口腔AI助手生成 · 仅供患者参考 · 具体以医生面诊为准</div>
+</body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 600);
+}
+
+function pdfStyles() {
+  return `
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:#333;max-width:780px;margin:0 auto;padding:24px}
+.patient-hero{text-align:center;padding:24px 20px;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;border-radius:12px;margin-bottom:16px}
+.patient-hero h2{font-size:20px;font-weight:700;margin:0 0 4px}
+.patient-hero .sub{font-size:13px;opacity:.85}
+.recommend-box{background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;gap:12px;align-items:center}
+.recommend-box .rec-icon{font-size:28px}
+.recommend-box .rec-text{font-size:14px;line-height:1.7}
+.compare-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px;border-radius:8px;overflow:hidden}
+.compare-table th{background:#f9fafb;padding:10px 14px;font-weight:700;text-align:center;border:1px solid #e5e7eb}
+.compare-table td{padding:10px 14px;text-align:center;border:1px solid #e5e7eb}
+.compare-table .highlight{background:#eff6ff;color:#1e40af;font-weight:700}
+.compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+.plan-option{border-radius:12px;overflow:hidden;background:#fff;border:2px solid #e5e7eb}
+.plan-option.recommended{border-color:#2563eb;box-shadow:0 2px 12px rgba(37,99,235,.15)}
+.plan-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin:10px 0 4px 14px}
+.plan-badge.basic{background:#f0fdf4;color:#166534}
+.plan-badge.standard{background:#eff6ff;color:#1e40af}
+.plan-badge.premium{background:#faf5ff;color:#6b21a8}
+.plan-badge.recommend{background:#fef3c7;color:#b45309}
+.plan-header{text-align:center;padding:12px 14px 8px}
+.plan-header .plan-name{font-size:16px;font-weight:800}
+.plan-header .plan-price{font-size:22px;font-weight:900;color:#2563eb;margin:4px 0}
+.plan-header .plan-duration{font-size:12px;color:#666}
+.plan-body{padding:12px 14px}
+.plan-section{margin-bottom:10px}
+.ps-title{font-size:12px;font-weight:700;margin-bottom:3px;color:#666}
+.ps-list{list-style:none;padding:0;font-size:12px;line-height:1.7}
+.ps-pros li::before{content:'✓ ';color:#16a34a}
+.ps-cons li::before{content:'- ';color:#f59e0b}
+.patient-cta{text-align:center;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;padding:18px 20px;border-radius:10px;margin-top:12px}
+.patient-cta .cta-phone{font-size:22px;font-weight:800;letter-spacing:1px}
+.patient-cta .cta-note{font-size:11px;opacity:.8;margin-top:3px}
+.footer{text-align:center;color:#999;font-size:10px;margin-top:20px;border-top:1px solid #eee;padding-top:14px}
+@media print{body{padding:16px}}
+  `.trim();
 }
 
 // ========== MARKDOWN TO HTML ==========
