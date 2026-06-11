@@ -19,7 +19,7 @@ def fetch_file(path):
 
 def get_remote_version():
     content = fetch_file("version.txt")
-    return content.decode().strip()
+    return content.decode("utf-8").strip()
 
 def get_local_version():
     try:
@@ -52,7 +52,7 @@ def main():
     print(f"发现新版本: {remote} (当前: {local or '无'})")
     print("正在更新...")
 
-    files = ["index.html", "server.js", "version.txt"]
+    files = ["index.html", "server.js", "version.txt", "check_update.py"]
     for fname in files:
         try:
             download_and_save(fname)
