@@ -8,6 +8,112 @@ const { WebSocket, WebSocketServer } = require('ws');
 const PORT = 8080;
 const DASHSCOPE_WS = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference';
 
+// ---- 数据文件存储（坚果云同步）----
+const HOME = process.env.HOME || process.env.USERPROFILE || process.env.HOMEPATH || '';
+// 坚果云路径自动检测（支持新旧版本目录结构）
+function detectNutCloudDir() {
+  const candidates = [
+    // 新版坚果云路径（Nutstore/1/ 子目录结构）
+    path.join(HOME, 'Nutstore', '1', '我的坚果云'),
+    path.join(HOME, 'Nutstore', '我的坚果云'),
+    // 旧版路径（直接在HOME下）
+    path.join(HOME, '我的坚果云'),
+    path.join(HOME, 'NutCloud'),
+    path.join(HOME, '坚果云'),
+    path.join(HOME, 'JianguoCloud'),
+  ];
+  for (const d of candidates) {
+    try {
+      if (fs.existsSync(d)) {
+        log('坚果云检测成功: ' + d);
+        return d;
+      }
+    } catch (_) {}
+  }
+  // 深度扫描：尝试在 Nutstore 子目录中寻找
+  const nutstoreBase = path.join(HOME, 'Nutstore');
+  try {
+    if (fs.existsSync(nutstoreBase)) {
+      const subdirs = fs.readdirSync(nutstoreBase);
+      for (const sub of subdirs) {
+        for (const name of ['我的坚果云', 'NutCloud', '坚果云', 'JianguoCloud']) {
+          const fullPath = path.join(nutstoreBase, sub, name);
+          try {
+            if (fs.existsSync(fullPath)) {
+              log('坚果云深度检测成功: ' + fullPath);
+              return fullPath;
+            }
+          } catch (_) {}
+        }
+      }
+    }
+  } catch (_) {}
+  log('坚果云未检测到，使用本地数据目录');
+  return null;
+}
+const NUT_DIR = detectNutCloudDir();
+let DATA_DIR = NUT_DIR ? path.join(NUT_DIR, '德仁AI数据') : path.join(__dirname, 'dr-data');
+// 确保数据目录存在
+try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (_) {}
+
+// 生成本机唯一ID（用医生名+主机名的哈希）
+function getComputerId() {
+  const host = process.env.COMPUTERNAME || process.env.HOSTNAME || 'pc';
+  return host.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) + '-' + Date.now().toString(36).slice(-4);
+}
+const COMPUTER_ID_FILE = path.join(DATA_DIR, '.computer-id');
+let COMPUTER_ID;
+try { COMPUTER_ID = fs.readFileSync(COMPUTER_ID_FILE, 'utf-8').trim(); } catch (_) {
+  COMPUTER_ID = getComputerId();
+  try { fs.writeFileSync(COMPUTER_ID_FILE, COMPUTER_ID, 'utf-8'); } catch (_) {}
+}
+
+function getLocalDataFile() {
+  return path.join(DATA_DIR, 'dr-data-' + COMPUTER_ID + '.json');
+}
+
+function readLocalData() {
+  const file = getLocalDataFile();
+  try {
+    const raw = fs.readFileSync(file, 'utf-8');
+    return JSON.parse(raw);
+  } catch (_) {
+    return { clinicName: '', doctorName: '', computerId: COMPUTER_ID, records: [] };
+  }
+}
+
+function writeLocalData(data) {
+  const file = getLocalDataFile();
+  try { fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) {
+    log('写入数据文件失败: ' + e.message);
+    throw e; // 抛出异常，让调用方知道写入失败
+  }
+}
+
+function readAllData() {
+  const allRecords = [];
+  try {
+    const files = fs.readdirSync(DATA_DIR);
+    for (const f of files) {
+      if (f.startsWith('dr-data-') && f.endsWith('.json')) {
+        try {
+          const raw = fs.readFileSync(path.join(DATA_DIR, f), 'utf-8');
+          const data = JSON.parse(raw);
+          if (data.records && Array.isArray(data.records)) {
+            for (const rec of data.records) {
+              rec._source = f; // 标记来源文件
+              allRecords.push(rec);
+            }
+          }
+        } catch (_) { /* skip corrupt files */ }
+      }
+    }
+  } catch (_) {}
+  // 按时间排序（最新的在前）
+  allRecords.sort((a, b) => (b.id || 0) - (a.id || 0));
+  return allRecords;
+}
+
 // ---- 静态文件 MIME ----
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -448,6 +554,122 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/api/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
+
+  // 数据目录信息
+  if (req.method === 'GET' && req.url === '/api/data-info') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      dataDir: DATA_DIR,
+      nutDir: NUT_DIR,
+      computerId: COMPUTER_ID,
+      localFile: getLocalDataFile(),
+      autoSync: !!NUT_DIR
+    }));
+    return;
+  }
+
+  // 设置数据目录
+  if (req.method === 'POST' && req.url === '/api/set-data-dir') {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      try {
+        const body = JSON.parse(Buffer.concat(chunks).toString());
+        const newDir = body.dir;
+        if (!newDir) { res.writeHead(400); res.end(JSON.stringify({ error: '缺少 dir 参数' })); return; }
+        try { fs.mkdirSync(newDir, { recursive: true }); } catch (e) {
+          res.writeHead(400); res.end(JSON.stringify({ error: '目录创建失败: ' + e.message })); return;
+        }
+        DATA_DIR = newDir;
+        // 重新生成 computer ID 文件
+        const newIdFile = path.join(DATA_DIR, '.computer-id');
+        try { COMPUTER_ID = fs.readFileSync(newIdFile, 'utf-8').trim(); } catch (_) {
+          try { fs.writeFileSync(newIdFile, COMPUTER_ID, 'utf-8'); } catch (_) {}
+        }
+        log('数据目录已更新: ' + DATA_DIR);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ dataDir: DATA_DIR, computerId: COMPUTER_ID }));
+      } catch (e) {
+        res.writeHead(500); res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // 保存一条记录到数据文件
+  if (req.method === 'POST' && req.url === '/api/save-record') {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      try {
+        const record = JSON.parse(Buffer.concat(chunks).toString());
+        const data = readLocalData();
+        data.clinicName = record.clinicName || data.clinicName;
+        data.doctorName = record.doctorName || data.doctorName;
+        data.records.unshift(record);
+        writeLocalData(data);
+        log('数据保存: patient=' + (record.patient || '?') + ', 总=' + data.records.length);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, total: data.records.length }));
+      } catch (e) {
+        log('保存记录失败: ' + e.message);
+        res.writeHead(500); res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // 批量同步 localStorage 数据到服务端（一次性迁移）
+  if (req.method === 'POST' && req.url === '/api/bulk-sync') {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      try {
+        const body = JSON.parse(Buffer.concat(chunks).toString());
+        const records = body.records || [];
+        if (!Array.isArray(records) || records.length === 0) {
+          res.writeHead(400); res.end(JSON.stringify({ error: 'records 为空' })); return;
+        }
+        const data = readLocalData();
+        data.clinicName = body.clinicName || data.clinicName;
+        data.doctorName = body.doctorName || data.doctorName;
+        // 去重：只添加服务端没有的记录（按 id 判断，无 id 的记录按时间+患者名去重）
+        const existingKeys = new Set(data.records.map(r => r.id ? String(r.id) : (r.time || '') + '|' + (r.patient || '')));
+        const newRecords = records.filter(r => {
+          const key = r.id ? String(r.id) : (r.time || '') + '|' + (r.patient || '');
+          return !existingKeys.has(key);
+        });
+        data.records = newRecords.concat(data.records); // 新记录在前
+        writeLocalData(data);
+        log('批量同步: 收到=' + records.length + ', 新增=' + newRecords.length + ', 总=' + data.records.length);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, added: newRecords.length, total: data.records.length }));
+      } catch (e) {
+        log('批量同步失败: ' + e.message);
+        res.writeHead(500); res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // 获取所有数据（合并所有文件）
+  if (req.method === 'GET' && req.url === '/api/get-all-data') {
+    const records = readAllData();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ total: records.length, records }));
+    return;
+  }
+
+  // 导出本机数据（下载 JSON 文件）
+  if (req.method === 'GET' && req.url === '/api/export-data') {
+    const data = readLocalData();
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="dr-export-' + COMPUTER_ID + '.json"'
+    });
+    res.end(JSON.stringify(data, null, 2));
     return;
   }
 

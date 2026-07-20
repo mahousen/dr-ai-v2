@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>德仁口腔 · AI病历助手 v2.0.20260608c</title>
+<title>德仁口腔 · AI病历助手 v2.0.20260720b</title>
 <style>.upd-bar{position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px 40px 6px 12px;font-size:13px;z-index:99999}.upd-bar .x{position:absolute;right:8px;top:4px;font-size:18px;cursor:pointer;opacity:.7}.upd-bar .x:hover{opacity:1}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <style>
@@ -371,6 +371,7 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
       <button class="tab-btn" data-tab="learn" onclick="switchTab('learn',this)">📚 学习录音</button>
       <button class="tab-btn" data-tab="history" onclick="switchTab('history',this)">📋 历史记录</button>
       <button class="tab-btn" data-tab="plan" onclick="switchTab('plan',this)">📸 治疗方案</button>
+      <button class="tab-btn" data-tab="analytics" onclick="switchTab('analytics',this)">📈 数据分析</button>
       <button class="tab-btn" data-tab="settings" onclick="switchTab('settings',this)">⚙️ 设置</button>
     </div>
     <div class="topbar-right">
@@ -678,10 +679,91 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
         </div>
       </div>
     </div>
+
+    <!-- 数据分析页面 -->
+    <div class="page" id="page-analytics">
+      <div class="set-card">
+        <h3>📈 患者数据分析</h3>
+        <p style="font-size:13px;color:var(--gy6);margin-bottom:12px">
+          汇总所有患者画像数据，分析患者群体特征、成交意向、关注维度，指导工作重点。
+        </p>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="save-btn" onclick="loadAnalyticsData()">🔄 刷新数据</button>
+          <button class="save-btn" onclick="exportAllData()">📤 导出数据</button>
+          <button class="save-btn" onclick="document.getElementById('importFile').click()">📥 导入数据</button>
+          <input type="file" id="importFile" accept=".json" style="display:none" onchange="importDataFile(event)">
+        </div>
+        <div id="analyticsInfo" style="font-size:12px;color:var(--gy6);margin-bottom:8px"></div>
+      </div>
+
+      <div id="analyticsContent" style="display:none">
+        <!-- 总览卡片 -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+          <div class="set-card" style="text-align:center;padding:16px">
+            <div style="font-size:24px;font-weight:700;color:var(--blue)" id="statTotal">0</div>
+            <div style="font-size:12px;color:var(--gy6)">总患者数</div>
+          </div>
+          <div class="set-card" style="text-align:center;padding:16px">
+            <div style="font-size:24px;font-weight:700;color:#e24b4a" id="statHigh">0</div>
+            <div style="font-size:12px;color:var(--gy6)">高意向</div>
+          </div>
+          <div class="set-card" style="text-align:center;padding:16px">
+            <div style="font-size:24px;font-weight:700;color:#ef9f27" id="statMid">0</div>
+            <div style="font-size:12px;color:var(--gy6)">中意向</div>
+          </div>
+          <div class="set-card" style="text-align:center;padding:16px">
+            <div style="font-size:24px;font-weight:700;color:#639922" id="statLow">0</div>
+            <div style="font-size:12px;color:var(--gy6)">低意向</div>
+          </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div class="set-card" style="padding:16px">
+            <h3 style="font-size:14px;margin-bottom:8px">性别分布</h3>
+            <canvas id="chartGender" height="200"></canvas>
+          </div>
+          <div class="set-card" style="padding:16px">
+            <h3 style="font-size:14px;margin-bottom:8px">年龄段分布</h3>
+            <canvas id="chartAge" height="200"></canvas>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div class="set-card" style="padding:16px">
+            <h3 style="font-size:14px;margin-bottom:8px">成交意向分布</h3>
+            <canvas id="chartIntention" height="200"></canvas>
+          </div>
+          <div class="set-card" style="padding:16px">
+            <h3 style="font-size:14px;margin-bottom:8px">就诊动机分布</h3>
+            <canvas id="chartMotivation" height="200"></canvas>
+          </div>
+        </div>
+
+        <!-- 关注维度排行 -->
+        <div class="set-card" style="padding:16px;margin-bottom:16px">
+          <h3 style="font-size:14px;margin-bottom:8px">患者关注维度排行</h3>
+          <div id="concernsRanking"></div>
+        </div>
+
+        <!-- 主诉排行 -->
+        <div class="set-card" style="padding:16px;margin-bottom:16px">
+          <h3 style="font-size:14px;margin-bottom:8px">主诉问题排行</h3>
+          <div id="complaintRanking"></div>
+        </div>
+
+        <!-- 时间趋势 -->
+        <div class="set-card" style="padding:16px;margin-bottom:16px">
+          <h3 style="font-size:14px;margin-bottom:8px">每月患者量趋势</h3>
+          <canvas id="chartTrend" height="180"></canvas>
+        </div>
+      </div>
+
+      <div id="analyticsEmpty" style="text-align:center;padding:40px;color:var(--gy6)">
+        暂无数据，请先使用录音写病历功能积累患者记录
+      </div>
+    </div>
   </div>
 </div>
-
-<!-- TOAST -->
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
@@ -797,6 +879,9 @@ function saveSettings() {
     }
   } catch(_) {}
   localStorage.setItem('dr_settings_v2', JSON.stringify(state.settings));
+  // 同步到独立 key（兼容 PDF 导出）
+  localStorage.setItem('dr_clinic_v2', state.settings.clinicName || '');
+  localStorage.setItem('dr_doctor_v2', state.settings.doctorName || '');
 }
 
 function getApiKeyForSTT() {
@@ -863,9 +948,55 @@ try {
   }
   saveSettings();
   console.log('[DR-AI v2] 初始化成功, doctor:', state.settings.doctorName);
+  // 预填登录输入框
+  document.getElementById('loginDoctor').value = state.settings.doctorName || '马医生';
+  document.getElementById('loginClinic').value = state.settings.clinicName || '烟台德仁口腔医院';
 } catch (e) {
   console.error('[DR-AI v2] 初始化失败:', e);
   alert('初始化失败，请清除浏览器数据后重试: ' + e.message);
+}
+
+// ========== 患者画像解析（从 AI 文本提取结构化字段）==========
+function parseProfileFields(text) {
+  if (!text) return {};
+  const r = {};
+  // 性别（兼容多种格式：性别：男 / - 性别：男 / **性别**：男 等）
+  const gm = text.match(/(?:[-*]\s*)?性别[：:]\s*(男|女|未知)/);
+  if (gm) r.gender = gm[1];
+  // 年龄段（兼容 "大致年龄段"、"年龄段" 等）
+  const am = text.match(/(?:大致)?年龄段[：:]\s*(儿童|青少年|青年|中年|老年|未知)/);
+  if (am) r.ageGroup = am[1];
+  // 主诉问题（兼容 "主诉问题"、"主诉" 等）
+  const cm = text.match(/主诉(?:问题)?[：:]\s*(.+)/);
+  if (cm) r.chiefComplaint = cm[1].trim().replace(/[，。；、\n].*/g, '').slice(0, 50);
+  // 就诊动机
+  const mm = text.match(/就诊动机[：:]\s*(.+)/);
+  if (mm) r.motivation = mm[1].trim().replace(/[，。；、\n].*/g, '').slice(0, 30);
+  // 消费意愿
+  const wm = text.match(/消费意愿[：:]\s*(高|中|低)/);
+  if (wm) r.willingness = wm[1];
+  // 价格敏感度（兼容 "对价格的敏感度"、"价格敏感度" 等）
+  const pm = text.match(/(?:对)?价格(?:的)?敏感度[：:]\s*(高|中|低)/);
+  if (pm) r.priceSensitivity = pm[1];
+  // 沟通风格
+  const sm = text.match(/沟通风格[：:]\s*(理性型|焦虑型|随和型|挑剔型|未知)/);
+  if (sm) r.communicationStyle = sm[1];
+  // 决策模式
+  const dm = text.match(/决策模式[：:]\s*(自主决定|需家人商量|依赖医生建议|未知)/);
+  if (dm) r.decisionMode = dm[1];
+  // 成交意向等级（兼容 emoji 后有空格、emoji前有换行等）
+  const im = text.match(/成交意向等级[：:]\s*[🔴🟡🟢]?\s*[：:]*\s*(高|中|低)/);
+  if (im) r.intention = im[1];
+  // 关注维度列表（▶标注的，兼容 - ▶ 和 ▶ 格式）
+  const concernLines = text.match(/[▶▸]\s*(.+)/g);
+  if (concernLines) r.keyConcerns = concernLines.map(l => l.replace(/[▶▸]\s*/, '').trim().replace(/[，。；、].*/g, '').slice(0, 20));
+  // 流失风险（兼容 "流失风险：高" 和 "流失风险：高/中/低"）
+  const rm = text.match(/流失风险[：:]\s*(高|中|低)/);
+  if (rm) r.riskLevel = rm[1];
+  // 口腔卫生习惯
+  const hm = text.match(/口腔卫生习惯[：:]\s*(.+)/);
+  if (hm) r.hygieneHabit = hm[1].trim().replace(/[，。；、\n].*/g, '').slice(0, 40);
+  return r;
 }
 
 // ========== LOGIN/LOGOUT ==========
@@ -915,6 +1046,7 @@ function switchTab(tab, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (tab === 'history') loadHistory();
+  if (tab === 'analytics') loadAnalyticsData();
 }
 
 // ========== SETTINGS UI ==========
@@ -1429,13 +1561,18 @@ async function backgroundGenerate(text) {
         record: record,
         analysis: analysis,
         profile: profile,
+        profileFields: parseProfileFields(profile),
         duration: fmtTime(state.recSeconds),
         time: new Date().toLocaleString(),
         audioData: audioData || null,
+        clinicName: state.settings.clinicName || '',
+        doctorName: state.settings.doctorName || '',
       };
       const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
       records.unshift(rec);
       localStorage.setItem('dr_records_v2', JSON.stringify(records));
+      // 同步到坚果云
+      syncRecordToServer(rec);
       updateDashboardStats();
     };
     saveRecord();
@@ -1993,13 +2130,29 @@ function saveRecord() {
     record: state.currentRecord,
     analysis: state.currentAnalysis || '',
     profile: state.currentProfile || '',
+    profileFields: parseProfileFields(state.currentProfile || ''),
     time: new Date().toLocaleString(),
+    clinicName: state.settings.clinicName || '',
+    doctorName: state.settings.doctorName || '',
   };
   const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
   records.unshift(record);
   localStorage.setItem('dr_records_v2', JSON.stringify(records));
+  // 同步到坚果云数据文件
+  syncRecordToServer(record);
   loadHistory();  // 刷新历史列表
   showToast('记录已保存', 'success');
+}
+
+// 同步记录到服务器（坚果云）
+async function syncRecordToServer(record) {
+  try {
+    await fetch('/api/save-record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record),
+    });
+  } catch (_) { /* 静默失败，不影响本地保存 */ }
 }
 
 // ========== LEARN ==========
@@ -3437,6 +3590,314 @@ function showToast(msg, type) {
   t.textContent = msg;
   c.appendChild(t);
   setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+// ========== 数据分析 ==========
+let analyticsChartInstances = {};
+
+async function loadAnalyticsData() {
+  const infoEl = document.getElementById('analyticsInfo');
+  infoEl.textContent = '正在加载...';
+
+  // 尝试从服务器读取合并数据（坚果云）
+  let allRecords = [];
+  let fromServer = false;
+  try {
+    const resp = await fetch('/api/get-all-data');
+    const data = await resp.json();
+    if (data.records && data.records.length > 0) {
+      allRecords = data.records;
+      fromServer = true;
+    }
+  } catch (_) {}
+
+  // 如果服务器没有数据，从 localStorage 补充
+  if (allRecords.length === 0) {
+    const localRecords = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+    allRecords = localRecords;
+    // 一次性迁移：将 localStorage 数据同步到服务端文件（仅首次）
+    const migrationDone = localStorage.getItem('dr_migration_done');
+    if (localRecords.length > 0 && !migrationDone) {
+      try {
+        const syncResp = await fetch('/api/bulk-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            records: localRecords,
+            clinicName: state.settings.clinicName || '',
+            doctorName: state.settings.doctorName || '',
+          }),
+        });
+        const syncResult = await syncResp.json();
+        console.log('[DR-AI] 数据迁移结果:', syncResult);
+        if (syncResult.ok) {
+          localStorage.setItem('dr_migration_done', '1');
+          infoEl.textContent = '数据迁移成功！已同步 ' + syncResult.added + ' 条记录到服务器';
+        }
+      } catch (e) {
+        console.log('[DR-AI] 数据迁移失败:', e.message);
+      }
+    }
+  }
+
+  // 解析画像字段（旧记录可能没有 profileFields）
+  let parsedCount = 0;
+  let emptyProfileCount = 0;
+  let parseFailCount = 0;
+  for (const rec of allRecords) {
+    if (!rec.profileFields || Object.keys(rec.profileFields).length === 0) {
+      if (rec.profile) {
+        rec.profileFields = parseProfileFields(rec.profile);
+        if (Object.keys(rec.profileFields).length > 0) {
+          parsedCount++;
+        } else {
+          parseFailCount++; // 有画像文本但解析为空（格式不匹配）
+        }
+      } else {
+        emptyProfileCount++; // 完全没有画像文本
+      }
+    } else {
+      parsedCount++;
+    }
+  }
+  console.log('[DR-AI] 分析数据: 总记录=' + allRecords.length + ', 有画像=' + parsedCount + ', 无画像=' + emptyProfileCount + ', 解析失败=' + parseFailCount);
+  // 打印前3条记录的画像文本，帮助诊断
+  for (let i = 0; i < Math.min(3, allRecords.length); i++) {
+    console.log('[DR-AI] 记录#' + i, 'profile长度:', (allRecords[i].profile || '').length, 'profileFields:', JSON.stringify(allRecords[i].profileFields));
+    if (allRecords[i].profile) {
+      console.log('[DR-AI] 记录#' + i, '画像文本前200字:', allRecords[i].profile.slice(0, 200));
+    }
+  }
+
+  const sourceLabel = fromServer ? '多台电脑（坚果云）' : (allRecords.length > 0 ? '本机' : '无');
+  infoEl.textContent = '共 ' + allRecords.length + ' 条记录（来自 ' + sourceLabel + '）' +
+    (emptyProfileCount > 0 ? ' · ' + emptyProfileCount + ' 条缺少画像数据' : '');
+
+  if (allRecords.length === 0) {
+    document.getElementById('analyticsContent').style.display = 'none';
+    document.getElementById('analyticsEmpty').style.display = 'block';
+    return;
+  }
+  document.getElementById('analyticsContent').style.display = 'block';
+  document.getElementById('analyticsEmpty').style.display = 'none';
+
+  // 动态加载 Chart.js
+  if (!window.Chart) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.7/chart.umd.min.js';
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  renderAnalytics(allRecords);
+}
+
+function renderAnalytics(records) {
+  const pfList = records.map(r => r.profileFields || {});
+  const hasProfile = pfList.filter(p => Object.keys(p).length > 0);
+
+  // 总览卡片
+  document.getElementById('statTotal').textContent = records.length;
+  const intentions = hasProfile.map(p => p.intention || '未知');
+  document.getElementById('statHigh').textContent = intentions.filter(i => i === '高').length;
+  document.getElementById('statMid').textContent = intentions.filter(i => i === '中').length;
+  document.getElementById('statLow').textContent = intentions.filter(i => i === '低').length;
+
+  // 销毁旧图表
+  for (const key in analyticsChartInstances) {
+    analyticsChartInstances[key].destroy();
+  }
+
+  const colors = {
+    blue: '#378ADD', red: '#E24B4A', amber: '#EF9F27', green: '#639922',
+    teal: '#1D9E75', purple: '#7F77DD', pink: '#D4537E', coral: '#D85A30',
+    gray: '#888780'
+  };
+
+  // 性别分布
+  const genders = hasProfile.map(p => p.gender || '未知');
+  const genderCounts = countBy(genders);
+  analyticsChartInstances.gender = new Chart(document.getElementById('chartGender'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(genderCounts),
+      datasets: [{ data: Object.values(genderCounts), backgroundColor: [colors.blue, colors.pink, colors.gray] }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+  });
+
+  // 年龄段分布
+  const ages = hasProfile.map(p => p.ageGroup || '未知');
+  const ageCounts = countBy(ages);
+  const ageOrder = ['儿童', '青少年', '青年', '中年', '老年', '未知'];
+  const orderedAge = ageOrder.filter(k => ageCounts[k]).map(k => ({ label: k, value: ageCounts[k] }));
+  analyticsChartInstances.age = new Chart(document.getElementById('chartAge'), {
+    type: 'bar',
+    data: {
+      labels: orderedAge.map(o => o.label),
+      datasets: [{ data: orderedAge.map(o => o.value), backgroundColor: colors.teal }]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+
+  // 成交意向分布
+  const intCounts = countBy(intentions);
+  const intOrder = ['高', '中', '低', '未知'];
+  const orderedInt = intOrder.filter(k => intCounts[k]).map(k => ({ label: k, value: intCounts[k] }));
+  analyticsChartInstances.intention = new Chart(document.getElementById('chartIntention'), {
+    type: 'doughnut',
+    data: {
+      labels: orderedInt.map(o => o.label),
+      datasets: [{ data: orderedInt.map(o => o.value), backgroundColor: [colors.red, colors.amber, colors.green, colors.gray] }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+  });
+
+  // 就诊动机分布
+  const motivations = hasProfile.map(p => p.motivation || '未知');
+  const motCounts = countBy(motivations);
+  const topMot = Object.entries(motCounts).sort((a,b) => b[1] - a[1]).slice(0, 6);
+  analyticsChartInstances.motivation = new Chart(document.getElementById('chartMotivation'), {
+    type: 'bar',
+    data: {
+      labels: topMot.map(m => m[0]),
+      datasets: [{ data: topMot.map(m => m[1]), backgroundColor: colors.amber }]
+    },
+    options: { responsive: true, indexAxis: 'y', scales: { x: { beginAtZero: true } } }
+  });
+
+  // 关注维度排行
+  const allConcerns = [];
+  hasProfile.forEach(p => {
+    if (p.keyConcerns) p.keyConcerns.forEach(c => allConcerns.push(c));
+  });
+  const concernCounts = countBy(allConcerns);
+  const topConcerns = Object.entries(concernCounts).sort((a,b) => b[1] - a[1]).slice(0, 8);
+  const concernsHtml = topConcerns.map((c, i) =>
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+    '<span style="font-weight:700;color:' + (i < 2 ? colors.red : colors.blue) + ';width:20px">' + (i+1) + '</span>' +
+    '<span style="flex:1;font-size:13px">' + c[0] + '</span>' +
+    '<span style="font-weight:600;color:' + colors.teal + '">' + c[1] + '人</span>' +
+    '<div style="width:' + (c[1] / topConcerns[0][1] * 100) + '%;height:8px;background:' + colors.teal + ';border-radius:4px;max-width:200px"></div>' +
+    '</div>'
+  ).join('');
+  document.getElementById('concernsRanking').innerHTML = concernsHtml || '<span style="color:var(--gy6)">暂无数据</span>';
+
+  // 主诉排行
+  const complaints = hasProfile.map(p => p.chiefComplaint || '未知');
+  const compCounts = countBy(complaints);
+  const topComp = Object.entries(compCounts).sort((a,b) => b[1] - a[1]).slice(0, 8);
+  const compHtml = topComp.map((c, i) =>
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+    '<span style="font-weight:700;color:' + (i < 2 ? colors.coral : colors.blue) + ';width:20px">' + (i+1) + '</span>' +
+    '<span style="flex:1;font-size:13px">' + c[0] + '</span>' +
+    '<span style="font-weight:600;color:' + colors.coral + '">' + c[1] + '人</span>' +
+    '</div>'
+  ).join('');
+  document.getElementById('complaintRanking').innerHTML = compHtml || '<span style="color:var(--gy6)">暂无数据</span>';
+
+  // 时间趋势
+  const monthly = {};
+  records.forEach(r => {
+    const t = r.time || '';
+    // 解析 "2026/7/20 15:30:00" 或 "2026-07-20..." 格式
+    const m = t.match(/(\d{4})[/\-年](\d{1,2})/);
+    if (m) {
+      const key = m[1] + '/' + m[2].padStart(2, '0');
+      monthly[key] = (monthly[key] || 0) + 1;
+    }
+  });
+  const months = Object.keys(monthly).sort();
+  analyticsChartInstances.trend = new Chart(document.getElementById('chartTrend'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [{
+        label: '患者数',
+        data: months.map(m => monthly[m]),
+        borderColor: colors.blue,
+        backgroundColor: '#E6F1FB',
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function countBy(arr) {
+  const c = {};
+  arr.forEach(v => { c[v] = (c[v] || 0) + 1; });
+  return c;
+}
+
+// 导出所有数据
+function exportAllData() {
+  const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+  // 同时解析画像字段
+  for (const rec of records) {
+    if (!rec.profileFields && rec.profile) {
+      rec.profileFields = parseProfileFields(rec.profile);
+    }
+  }
+  const data = {
+    clinicName: state.settings.clinicName,
+    doctorName: state.settings.doctorName,
+    exportTime: new Date().toLocaleString(),
+    records: records,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'dr-export-' + state.settings.doctorName + '-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('数据已导出', 'success');
+}
+
+// 导入数据文件
+function importDataFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      const newRecords = imported.records || [];
+      if (newRecords.length === 0) { showToast('文件中没有记录', 'error'); return; }
+
+      // 解析画像字段
+      for (const rec of newRecords) {
+        if (!rec.profileFields && rec.profile) {
+          rec.profileFields = parseProfileFields(rec.profile);
+        }
+      }
+
+      // 合并到本地 localStorage
+      const localRecords = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
+      const existingIds = new Set(localRecords.map(r => r.id));
+      const added = newRecords.filter(r => !existingIds.has(r.id));
+      if (added.length === 0) { showToast('没有新记录需要导入', 'error'); return; }
+      localRecords.unshift(...added);
+      localStorage.setItem('dr_records_v2', JSON.stringify(localRecords));
+
+      // 同步到服务器
+      for (const rec of added) {
+        try { await syncRecordToServer(rec); } catch (_) {}
+      }
+
+      showToast('导入 ' + added.length + ' 条新记录', 'success');
+      loadAnalyticsData(); // 刷新分析
+    } catch (err) {
+      showToast('导入失败: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // 重置，允许再次选择
 }
 
 </script>
