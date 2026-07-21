@@ -30,8 +30,14 @@ def get_local_version():
 
 def download_and_save(fname):
     content = fetch_file(fname)
-    with open(fname, "wb") as f:
-        f.write(content)
+    text_exts = ('.html', '.js', '.py', '.json', '.txt', '.sh', '.command', '.bat', '.css')
+    if any(fname.lower().endswith(ext) for ext in text_exts):
+        text = content.decode('utf-8', errors='replace')
+        with open(fname, 'w', encoding='utf-8', newline='') as f:
+            f.write(text)
+    else:
+        with open(fname, "wb") as f:
+            f.write(content)
 
 def main():
     print("检查更新...", end=" ", flush=True)
@@ -52,7 +58,7 @@ def main():
     print(f"发现新版本: {remote} (当前: {local or '无'})")
     print("正在更新...")
 
-    files = ["index.html", "server.js", "version.txt", "check_update.py"]
+    files = ["index.html", "server.js", "version.txt", "check_update.js", "check_update.py", "package.json"]
     for fname in files:
         try:
             download_and_save(fname)
