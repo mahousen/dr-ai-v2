@@ -561,13 +561,14 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
         <div class="learn-main">
           <div class="learn-box">
             <h3>📝 实时转写</h3>
-            <textarea class="rec-textarea" id="learnText" placeholder="开始录音后，文字将实时显示在这里..." readonly></textarea>
+            <textarea class="rec-textarea" id="learnText" placeholder="开始录音后，文字将实时显示在这里... 可修正后再生成总结"></textarea>
           </div>
           <div class="learn-box">
             <h3>🤖 AI 学习总结</h3>
             <textarea class="rec-textarea" id="learnSummary" placeholder="AI 总结将显示在这里..."></textarea>
             <div style="margin-top:8px;display:flex;gap:8px">
               <button class="btn btn-outline" id="learnSaveBtn" onclick="saveLearnRecord()" disabled>💾 保存学习记录</button>
+              <button class="btn btn-outline" onclick="relearnSummary()">🔄 重新生成</button>
               <button class="btn btn-outline" onclick="copyLearnSummary()">📋 复制总结</button>
             </div>
             <div style="margin-top:8px;font-size:12px;color:var(--gy5)" id="learnStatus">准备就绪</div>
@@ -2101,6 +2102,14 @@ function copyLearnSummary() {
   });
 }
 
+// 重新生成总结（用户修正转写文字后手动触发）
+function relearnSummary() {
+  const text = document.getElementById('learnText').value.trim();
+  if (!text) { showToast('转写内容为空，无法生成总结', 'error'); return; }
+  _learnSummaryCalled = false;  // 重置标记允许重新调用
+  learnGenerateSummary(text);
+}
+
 function saveRecord() {
   const record = {
     id: Date.now(),
@@ -2209,8 +2218,8 @@ async function startLearnRecording() {
           el.scrollTop = el.scrollHeight;
           document.getElementById('learnStatus').textContent = '转写完成，正在生成学习总结...';
           document.getElementById('learnLiveBadge').className = 'rec-live off';
-          // 转写完成后自动生成AI总结
-          learnGenerateSummary(msg.text, 'record');
+          // 转写完成后自动生成AI总结（用 el.value 确保用累积文本）
+          learnGenerateSummary(el.value, 'record');
         } else if (msg.type === 'error') {
           document.getElementById('learnStatus').textContent = '转写出错: ' + msg.message;
         }
@@ -2377,7 +2386,7 @@ function stopLearnKeepAlive() {
 async function reconnectLearnWs() {
   const apiKey = getApiKeyForSTT();
   if (!apiKey) return;
-  if (state.learnSttWs) { try { state.learnSttWs.close(); } catch(_) {} }
+  if (state.learnSttWs) { state.learnSttWs.onmessage = null; try { state.learnSttWs.close(); } catch(_) {} }
   const ws = new WebSocket('ws://localhost:' + location.port + '/ws/transcribe?key=' + encodeURIComponent(apiKey));
   state.learnSttWs = ws;
   ws.onopen = () => { document.getElementById('learnLiveBadge').className = 'rec-live on'; };
@@ -2421,11 +2430,8 @@ async function learnGenerateSummary(text, mode) {
 
   document.getElementById('learnStatus').textContent = '正在生成学习总结...';
 
-  // 根据模式选择不同的提示词
-  let summaryPrompt;
-  if (mode === 'upload') {
-    // 上传培训录音 → 提取知识点和学习要点
-    summaryPrompt = `你是一位专业的学习教练和知识提炼专家。以下是一段培训/学习录音的转写文本，请帮助提炼核心内容。
+  // 统一提示词：培训学习总结（本模块专用于参加培训学习）
+  const summaryPrompt = `你是一位专业的学习教练和知识提炼专家。以下是一段培训/学习录音的转写文本，请帮助提炼核心内容。
 
 ========== 转写文本 ==========
 ${text}
@@ -2445,29 +2451,6 @@ ${text}
 
 ## 🎯 行动清单
 （听完本次培训后，我应该立刻去做的事，3-5条具体行动）`;
-  } else {
-    // 实时录音 → 培训学习总结（本模块专用于参加培训学习）
-    summaryPrompt = `你是一位专业的学习教练和知识提炼专家。以下是一段培训/学习录音的实时转写文本，请帮助提炼核心内容。
-
-========== 转写文本 ==========
-${text}
-
-========== 请按以下格式输出 ==========
-## 📌 核心知识点
-（提炼本次培训的关键知识点，逐条列出，每条简洁清晰）
-
-## 💡 实操要点 & 方法论
-（培训中提到的可落地执行的方法、流程、技巧）
-
-## 🔑 关键金句
-（讲师最有价值的原话，3-5条，可直接引用）
-
-## ⚠️ 易错/易忽略点
-（培训中提到的常见误区、容易踩坑的地方）
-
-## 🎯 行动清单
-（听完本次培训后，我应该立刻去做的事，3-5条具体行动）`;
-  }
 
   try {
     const aiResp = await fetch(state.settings.apiUrl, {
@@ -2539,6 +2522,9 @@ async function uploadLearnFile(file) {
   document.getElementById('learnUploadFill').style.background = 'linear-gradient(90deg,var(--blue),#06b6d4)';
   document.getElementById('learnUploadStatus').textContent = '上传中...';
   document.getElementById('learnStatus').textContent = '上传录音文件中...';
+  document.getElementById('learnText').value = '';
+  document.getElementById('learnSummary').value = '';
+  document.getElementById('learnSaveBtn').disabled = true;
 
   // 禁用上传区域防止重复
   document.getElementById('learnUploadDrop').style.pointerEvents = 'none';
