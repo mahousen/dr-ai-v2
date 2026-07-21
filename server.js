@@ -369,7 +369,7 @@ async function handleTurboTranscribe(req, res, apiKey) {
     try {
       // 1. 获取 OSS 上传凭证
       log(`Turbo: 获取上传凭证, size=${(buffer.length/1024/1024).toFixed(1)}MB`);
-      const policyUrl = 'https://dashscope.aliyuncs.com/api/v1/uploads?action=getPolicy&model=paraformer-v2';
+      const policyUrl = 'https://dashscope.aliyuncs.com/api/v1/uploads?action=getPolicy&model=fun-asr';
       const polResp = await fetch(policyUrl, {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
@@ -418,7 +418,7 @@ async function handleTurboTranscribe(req, res, apiKey) {
             'X-DashScope-Async': 'enable'
           },
           body: JSON.stringify({
-            model: 'paraformer-v2',
+            model: 'fun-asr',
             input: { file_urls: [ossUrl] },
             parameters: { language_hints: ['zh'] }
           })
