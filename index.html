@@ -1669,7 +1669,7 @@ function debugLog(msg) {
 }
 
 // ========== STT Fallback: HTTP POST (for learning recordings) ==========
-async function transcribeAudioFallback(audioBlob) {
+async function transcribeAudioFallback(audioBlob, sttMode) {
   const apiKey = getApiKeyForSTT();
   if (!apiKey) {
     showToast('请先配置 API Key', 'error');
@@ -1678,7 +1678,8 @@ async function transcribeAudioFallback(audioBlob) {
   try {
     const pcm = await convertToPCM(audioBlob);
     const pcmBuf = new Uint8Array(pcm.buffer);
-    const resp = await fetch('/api/transcribe', {
+    const modeParam = sttMode ? '?mode=' + sttMode : '';
+    const resp = await fetch('/api/transcribe' + modeParam, {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream', 'Authorization': 'Bearer ' + apiKey },
       body: pcmBuf,
@@ -2183,8 +2184,8 @@ async function startLearnRecording() {
     const processor = audioCtx.createScriptProcessor(4096, 1, 1);
     state.learnProcessor = processor;
 
-    // 4. WebSocket 实时转写
-    const ws = new WebSocket('ws://localhost:' + location.port + '/ws/transcribe?key=' + encodeURIComponent(apiKey));
+    // 4. WebSocket 实时转写（learn模式=通用培训context，不用口腔术语）
+    const ws = new WebSocket('ws://localhost:' + location.port + '/ws/transcribe?key=' + encodeURIComponent(apiKey) + '&mode=learn');
     state.learnSttWs = ws;
 
     ws.onopen = () => {
@@ -2387,7 +2388,7 @@ async function reconnectLearnWs() {
   const apiKey = getApiKeyForSTT();
   if (!apiKey) return;
   if (state.learnSttWs) { state.learnSttWs.onmessage = null; try { state.learnSttWs.close(); } catch(_) {} }
-  const ws = new WebSocket('ws://localhost:' + location.port + '/ws/transcribe?key=' + encodeURIComponent(apiKey));
+  const ws = new WebSocket('ws://localhost:' + location.port + '/ws/transcribe?key=' + encodeURIComponent(apiKey) + '&mode=learn');
   state.learnSttWs = ws;
   ws.onopen = () => { document.getElementById('learnLiveBadge').className = 'rec-live on'; };
   ws.onmessage = (e) => {
@@ -2477,7 +2478,7 @@ ${text}
 // 手动转写兜底（WebSocket 断开时）
 async function learnTranscribeFallbackAndSummarize(blob) {
   document.getElementById('learnStatus').textContent = '手动转写中...';
-  const text = await transcribeAudioFallback(blob);
+  const text = await transcribeAudioFallback(blob, 'learn');
   if (text) {
     document.getElementById('learnText').value = text;
     await learnGenerateSummary(text, 'record');
