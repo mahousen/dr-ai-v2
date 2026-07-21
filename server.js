@@ -133,6 +133,7 @@ function dashScopeSTT(pcmBuffer, apiKey) {
     }
 
     ws.on('open', () => {
+      const DENTAL_CTX = '口腔门诊 牙齿 种植牙 根管治疗 拔牙 补牙 正畸 牙冠 牙周炎 龋齿 牙髓炎 智齿 牙周病 洗牙 烤瓷牙 全瓷牙 贴面 义齿 充填 根尖炎 楔状缺损 牙结石 牙龈出血 阻生齿 颞下颌 口腔黏膜 氟斑牙 牙外伤 根尖周病 牙龈炎 龈下刮治 牙体缺损 嵌体 光固化 粘接 牙槽骨 口腔修复 口腔外科 口腔内科 全口义齿 可摘义齿 固定桥 种植体 基台 覆盖义齿 软组织缝合 暂封 封闭剂 涂氟 固位钉';
       ws.send(JSON.stringify({
         header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
         payload: {
@@ -141,7 +142,7 @@ function dashScopeSTT(pcmBuffer, apiKey) {
           function: 'recognition',
           model: 'fun-asr-realtime',
           parameters: { format: 'pcm', sample_rate: 16000, language_hints: ['zh'] },
-          input: {}
+          input: { context: [{ role: 'user', content: [{ type: 'input_text', text: DENTAL_CTX }] }] }
         }
       }));
     });
@@ -247,14 +248,15 @@ function handleSttStream(browserWs, apiKey) {
   }
 
   dashWs.on('open', () => {
-    log('STT-WS: 百炼WS已连接, 发送run-task');
+    log('STT-WS: 百炼WS已连接, 发送run-task(含口腔术语上下文)');
+    const DENTAL_CTX = '口腔门诊 牙齿 种植牙 根管治疗 拔牙 补牙 正畸 牙冠 牙周炎 龋齿 牙髓炎 智齿 牙周病 洗牙 烤瓷牙 全瓷牙 贴面 义齿 充填 根尖炎 楔状缺损 牙结石 牙龈出血 阻生齿 颞下颌 口腔黏膜 氟斑牙 牙外伤 根尖周病 牙龈炎 龈下刮治 牙体缺损 嵌体 光固化 粘接 牙槽骨 口腔修复 口腔外科 口腔内科 全口义齿 可摘义齿 固定桥 种植体 基台 覆盖义齿 软组织缝合 暂封 封闭剂 涂氟 固位钉';
     dashWs.send(JSON.stringify({
       header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
       payload: {
         task_group: 'audio', task: 'asr', function: 'recognition',
         model: 'fun-asr-realtime',
         parameters: { format: 'pcm', sample_rate: 16000, language_hints: ['zh'] },
-        input: {}
+        input: { context: [{ role: 'user', content: [{ type: 'input_text', text: DENTAL_CTX }] }] }
       }
     }));
   });
@@ -369,7 +371,7 @@ async function handleTurboTranscribe(req, res, apiKey) {
     try {
       // 1. 获取 OSS 上传凭证
       log(`Turbo: 获取上传凭证, size=${(buffer.length/1024/1024).toFixed(1)}MB`);
-      const policyUrl = 'https://dashscope.aliyuncs.com/api/v1/uploads?action=getPolicy&model=fun-asr';
+      const policyUrl = 'https://dashscope.aliyuncs.com/api/v1/uploads?action=getPolicy&model=qwen3-asr-flash-filetrans';
       const polResp = await fetch(policyUrl, {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
@@ -418,7 +420,7 @@ async function handleTurboTranscribe(req, res, apiKey) {
             'X-DashScope-Async': 'enable'
           },
           body: JSON.stringify({
-            model: 'fun-asr',
+            model: 'qwen3-asr-flash-filetrans',
             input: { file_urls: [ossUrl] },
             parameters: { language_hints: ['zh'] }
           })
