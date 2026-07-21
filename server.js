@@ -10,45 +10,31 @@ const DASHSCOPE_WS = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference';
 
 // ---- 数据文件存储（坚果云同步）----
 const HOME = process.env.HOME || process.env.USERPROFILE || process.env.HOMEPATH || '';
-// 坚果云路径自动检测（支持新旧版本目录结构）
+// 坚果云路径自动检测
+// 坚果云路径自动检测（支持 Nutstore/1/ 子目录结构）
 function detectNutCloudDir() {
+  // 直接候选路径
   const candidates = [
-    // 新版坚果云路径（Nutstore/1/ 子目录结构）
-    path.join(HOME, 'Nutstore', '1', '我的坚果云'),
-    path.join(HOME, 'Nutstore', '我的坚果云'),
-    // 旧版路径（直接在HOME下）
     path.join(HOME, '我的坚果云'),
     path.join(HOME, 'NutCloud'),
     path.join(HOME, '坚果云'),
     path.join(HOME, 'JianguoCloud'),
+    path.join(HOME, 'Nutstore', '1', '我的坚果云'),
+    path.join(HOME, 'Nutstore', '我的坚果云'),
   ];
   for (const d of candidates) {
+    if (fs.existsSync(d)) return d;
+  }
+  // 深度扫描：查找 Nutstore 子目录
+  const nutstoreBase = path.join(HOME, 'Nutstore');
+  if (fs.existsSync(nutstoreBase)) {
     try {
-      if (fs.existsSync(d)) {
-        log('坚果云检测成功: ' + d);
-        return d;
+      for (const entry of fs.readdirSync(nutstoreBase)) {
+        const subPath = path.join(nutstoreBase, entry, '我的坚果云');
+        if (fs.existsSync(subPath)) return subPath;
       }
     } catch (_) {}
   }
-  // 深度扫描：尝试在 Nutstore 子目录中寻找
-  const nutstoreBase = path.join(HOME, 'Nutstore');
-  try {
-    if (fs.existsSync(nutstoreBase)) {
-      const subdirs = fs.readdirSync(nutstoreBase);
-      for (const sub of subdirs) {
-        for (const name of ['我的坚果云', 'NutCloud', '坚果云', 'JianguoCloud']) {
-          const fullPath = path.join(nutstoreBase, sub, name);
-          try {
-            if (fs.existsSync(fullPath)) {
-              log('坚果云深度检测成功: ' + fullPath);
-              return fullPath;
-            }
-          } catch (_) {}
-        }
-      }
-    }
-  } catch (_) {}
-  log('坚果云未检测到，使用本地数据目录');
   return null;
 }
 const NUT_DIR = detectNutCloudDir();
@@ -86,7 +72,7 @@ function writeLocalData(data) {
   const file = getLocalDataFile();
   try { fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) {
     log('写入数据文件失败: ' + e.message);
-    throw e; // 抛出异常，让调用方知道写入失败
+    throw e; // 不吞错，让调用方知道
   }
 }
 
@@ -621,33 +607,26 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 批量同步 localStorage 数据到服务端（一次性迁移）
+  // 批量同步（localStorage → 服务端）
   if (req.method === 'POST' && req.url === '/api/bulk-sync') {
-    const chunks = [];
-    req.on('data', c => chunks.push(c));
+    let body = '';
+    req.on('data', c => body += c);
     req.on('end', () => {
       try {
-        const body = JSON.parse(Buffer.concat(chunks).toString());
-        const records = body.records || [];
-        if (!Array.isArray(records) || records.length === 0) {
-          res.writeHead(400); res.end(JSON.stringify({ error: 'records 为空' })); return;
-        }
+        const { records, clinicName, doctorName } = JSON.parse(body);
+        if (!Array.isArray(records)) { res.writeHead(400); res.end(JSON.stringify({ error: 'records must be array' })); return; }
         const data = readLocalData();
-        data.clinicName = body.clinicName || data.clinicName;
-        data.doctorName = body.doctorName || data.doctorName;
-        // 去重：只添加服务端没有的记录（按 id 判断，无 id 的记录按时间+患者名去重）
-        const existingKeys = new Set(data.records.map(r => r.id ? String(r.id) : (r.time || '') + '|' + (r.patient || '')));
-        const newRecords = records.filter(r => {
-          const key = r.id ? String(r.id) : (r.time || '') + '|' + (r.patient || '');
-          return !existingKeys.has(key);
-        });
-        data.records = newRecords.concat(data.records); // 新记录在前
+        // 去重：按 id 或 (时间+患者/主题) 判断
+        const existingKeys = new Set(data.records.map(r => r.id || (r.time + '|' + (r.patient || r.topic || ''))));
+        const newRecords = records.filter(r => !existingKeys.has(r.id || (r.time + '|' + (r.patient || r.topic || ''))));
+        data.records.push(...newRecords);
+        if (clinicName) data.clinicName = clinicName;
+        if (doctorName) data.doctorName = doctorName;
         writeLocalData(data);
-        log('批量同步: 收到=' + records.length + ', 新增=' + newRecords.length + ', 总=' + data.records.length);
+        log('批量同步: 添加 ' + newRecords.length + ' 条记录 (去重后)');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true, added: newRecords.length, total: data.records.length }));
       } catch (e) {
-        log('批量同步失败: ' + e.message);
         res.writeHead(500); res.end(JSON.stringify({ error: e.message }));
       }
     });

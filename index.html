@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>德仁口腔 · AI病历助手 v2.0.20260720b</title>
+<title>德仁口腔 · AI病历助手 v2.0.20260608c</title>
 <style>.upd-bar{position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px 40px 6px 12px;font-size:13px;z-index:99999}.upd-bar .x{position:absolute;right:8px;top:4px;font-size:18px;cursor:pointer;opacity:.7}.upd-bar .x:hover{opacity:1}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <style>
@@ -103,7 +103,6 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
 /* ========== LEARN ========== */
 .learn-container{max-width:900px;margin:0 auto}
 .learn-bar{background:#fff;border-radius:var(--rd);padding:16px 20px;box-shadow:var(--sd);display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
-.learn-pause{display:none}.learn-pause.show{display:inline-flex}
 .learn-main{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .learn-box{background:#fff;border-radius:var(--rd);padding:20px;box-shadow:var(--sd)}
 
@@ -525,21 +524,27 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
       <div class="learn-container">
         <div class="learn-bar">
           <div class="ri"><label>主题：</label><input type="text" id="learnTopic" placeholder="沟通话术/开场白" style="width:160px"></div>
-          <div class="ri" id="learnTimeLabel"><label>时长：</label><span id="learnTimer">00:00</span></div>
-          <button class="btn btn-primary" id="learnBtn" onclick="toggleLearn()">🔴 开始学习录音</button>
-          <button class="btn btn-danger" id="learnStopBtn" onclick="stopLearn()" disabled>⏹ 停止</button>
-          <button class="btn btn-outline learn-pause" id="learnPauseBtn" onclick="toggleLearnPause()">⏸ 暂停</button>
+          <div class="ri"><label>时长：</label><span id="learnTimer">00:00</span></div>
+          <div class="ri">
+            <span class="rec-live off" id="learnLiveBadge"><span class="rec-live-dot"></span>实时转写</span>
+          </div>
         </div>
+        <div class="learn-bar" style="margin-top:8px">
+          <button class="btn btn-primary" id="learnBtn" onclick="startLearnRecording()">🔴 开始学习录音</button>
+          <button class="btn btn-pause" id="learnPauseBtn" onclick="toggleLearnPause()" style="display:none">⏸ 暂停</button>
+          <button class="btn btn-danger" id="learnStopBtn" onclick="stopLearnRecording()" disabled>⏹ 停止录音</button>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--gy5)">💡 边说边实时转写 · 结束录音后AI自动生成沟通总结</div>
         <div class="learn-main">
           <div class="learn-box">
-            <h3>📝 转写文本</h3>
-            <textarea class="rec-textarea" id="learnText" placeholder="录音转写结果将显示在这里..."></textarea>
+            <h3>📝 实时转写</h3>
+            <textarea class="rec-textarea" id="learnText" placeholder="开始录音后，文字将实时显示在这里..." readonly></textarea>
           </div>
           <div class="learn-box">
-            <h3>🤖 AI 总结</h3>
+            <h3>🤖 AI 沟通总结</h3>
             <textarea class="rec-textarea" id="learnSummary" placeholder="AI 总结将显示在这里..."></textarea>
             <div style="margin-top:8px;display:flex;gap:8px">
-              <button class="btn btn-outline" onclick="saveLearnRecord()">💾 保存学习记录</button>
+              <button class="btn btn-outline" id="learnSaveBtn" onclick="saveLearnRecord()" disabled>💾 保存学习记录</button>
               <button class="btn btn-outline" onclick="copyLearnSummary()">📋 复制总结</button>
             </div>
             <div style="margin-top:8px;font-size:12px;color:var(--gy5)" id="learnStatus">准备就绪</div>
@@ -905,13 +910,16 @@ try {
     learnRecording: false,
     learnPaused: false,
     recTimer: null,
-    learnTimer: null,
-    recSeconds: 0,
     learnSeconds: 0,
     mediaRecorder: null,
     learnMediaRecorder: null,
     audioChunks: [],
     learnChunks: [],
+    learnTimerVar: null,
+    learnSttWs: null,
+    learnAudioCtx: null,
+    learnProcessor: null,
+    learnStream: null,
     currentRecord: '',
     currentAnalysis: '',
     currentProfile: '',
@@ -960,23 +968,23 @@ try {
 function parseProfileFields(text) {
   if (!text) return {};
   const r = {};
-  // 性别（兼容多种格式：性别：男 / - 性别：男 / **性别**：男 等）
-  const gm = text.match(/(?:[-*]\s*)?性别[：:]\s*(男|女|未知)/);
+  // 性别
+  const gm = text.match(/性别[：:]\s*(男|女|未知)/);
   if (gm) r.gender = gm[1];
-  // 年龄段（兼容 "大致年龄段"、"年龄段" 等）
-  const am = text.match(/(?:大致)?年龄段[：:]\s*(儿童|青少年|青年|中年|老年|未知)/);
+  // 年龄段
+  const am = text.match(/年龄段[：:]\s*(儿童|青少年|青年|中年|老年|未知)/);
   if (am) r.ageGroup = am[1];
-  // 主诉问题（兼容 "主诉问题"、"主诉" 等）
-  const cm = text.match(/主诉(?:问题)?[：:]\s*(.+)/);
-  if (cm) r.chiefComplaint = cm[1].trim().replace(/[，。；、\n].*/g, '').slice(0, 50);
+  // 主诉
+  const cm = text.match(/主诉问题[：:]\s*(.+)/);
+  if (cm) r.chiefComplaint = cm[1].trim().slice(0, 50);
   // 就诊动机
   const mm = text.match(/就诊动机[：:]\s*(.+)/);
-  if (mm) r.motivation = mm[1].trim().replace(/[，。；、\n].*/g, '').slice(0, 30);
+  if (mm) r.motivation = mm[1].trim().slice(0, 30);
   // 消费意愿
   const wm = text.match(/消费意愿[：:]\s*(高|中|低)/);
   if (wm) r.willingness = wm[1];
-  // 价格敏感度（兼容 "对价格的敏感度"、"价格敏感度" 等）
-  const pm = text.match(/(?:对)?价格(?:的)?敏感度[：:]\s*(高|中|低)/);
+  // 价格敏感度
+  const pm = text.match(/价格.*敏感度[：:]\s*(高|中|低)/);
   if (pm) r.priceSensitivity = pm[1];
   // 沟通风格
   const sm = text.match(/沟通风格[：:]\s*(理性型|焦虑型|随和型|挑剔型|未知)/);
@@ -984,18 +992,18 @@ function parseProfileFields(text) {
   // 决策模式
   const dm = text.match(/决策模式[：:]\s*(自主决定|需家人商量|依赖医生建议|未知)/);
   if (dm) r.decisionMode = dm[1];
-  // 成交意向等级（兼容 emoji 后有空格、emoji前有换行等）
-  const im = text.match(/成交意向等级[：:]\s*[🔴🟡🟢]?\s*[：:]*\s*(高|中|低)/);
+  // 成交意向等级
+  const im = text.match(/成交意向等级[：:]\s*[🔴🟡🟢]\s*(高|中|低)/);
   if (im) r.intention = im[1];
-  // 关注维度列表（▶标注的，兼容 - ▶ 和 ▶ 格式）
-  const concernLines = text.match(/[▶▸]\s*(.+)/g);
-  if (concernLines) r.keyConcerns = concernLines.map(l => l.replace(/[▶▸]\s*/, '').trim().replace(/[，。；、].*/g, '').slice(0, 20));
-  // 流失风险（兼容 "流失风险：高" 和 "流失风险：高/中/低"）
+  // 关注维度列表（▶标注的）
+  const concernLines = text.match(/▶\s*(.+)/g);
+  if (concernLines) r.keyConcerns = concernLines.map(l => l.replace('▶ ', '').trim().slice(0, 20));
+  // 流失风险
   const rm = text.match(/流失风险[：:]\s*(高|中|低)/);
   if (rm) r.riskLevel = rm[1];
   // 口腔卫生习惯
   const hm = text.match(/口腔卫生习惯[：:]\s*(.+)/);
-  if (hm) r.hygieneHabit = hm[1].trim().replace(/[，。；、\n].*/g, '').slice(0, 40);
+  if (hm) r.hygieneHabit = hm[1].trim().slice(0, 40);
   return r;
 }
 
@@ -2038,57 +2046,7 @@ function cancelImport() {
   showToast('正在取消...', 'info');
 }
 
-// ========== LEARN TRANSCRIBE + SUMMARIZE ==========
-async function learnTranscribeAndSummarize(blob) {
-  document.getElementById('learnStatus').textContent = '转写中...';
-  const text = await transcribeAudioFallback(blob);
-  if (!text) { document.getElementById('learnStatus').textContent = '转写为空'; return; }
-
-  document.getElementById('learnText').value = text;
-  document.getElementById('learnStatus').textContent = '转写完成，正在总结...';
-
-  const key = state.settings.apiKey;
-  if (!key) { document.getElementById('learnStatus').textContent = '请填写 AI API Key'; return; }
-
-  try {
-    const summaryPrompt = `你是口腔门诊沟通教练。以下是医患沟通录音的转写文本，请帮助医生提升沟通能力。
-
-========== 转写文本 ==========
-${text}
-
-========== 请按以下格式输出 ==========
-## ✅ 沟通做得好的地方
-（具体指出医生做得好的地方，巩固优点）
-
-## ⚠️ 可以改进的地方
-（医生沟通中不恰当、遗漏、或表达不妥的地方，逐条具体说明）
-- 每条格式：问题描述 → 建议怎么说更好
-
-## 💡 话术建议
-（针对本次沟通，给出2-3条更优的话术示范）
-
-## 📋 患者核心诉求
-（一句话总结患者最关心的点）`;
-
-    const aiResp = await fetch(state.settings.apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-      body: JSON.stringify({
-        model: state.settings.model,
-        messages: [{ role: 'user', content: summaryPrompt }],
-        temperature: 0.3,
-      }),
-    });
-    const data = await aiResp.json();
-    const summary = data.choices?.[0]?.message?.content || '总结生成失败';
-    document.getElementById('learnSummary').value = summary;
-    document.getElementById('learnStatus').textContent = '总结完成';
-    showToast('学习录音转写+总结完成', 'success');
-  } catch (e) {
-    document.getElementById('learnStatus').textContent = '失败: ' + e.message;
-    showToast('学习录音处理失败: ' + e.message, 'error');
-  }
-}
+// ========== LEARN TRANSCRIBE FALLBACK ==========
 
 // ========== GENERATE RECORD (manual retry) ==========
 async function generateRecord() {
@@ -2155,61 +2113,309 @@ async function syncRecordToServer(record) {
   } catch (_) { /* 静默失败，不影响本地保存 */ }
 }
 
-// ========== LEARN ==========
-async function toggleLearn() {
+// ========== LEARN (学习录音 - 实时转写) ==========
+
+async function startLearnRecording() {
   if (state.learnRecording) return;
+  const apiKey = getApiKeyForSTT();
+  if (!apiKey) {
+    showToast('请先在设置中配置 API Key', 'error');
+    return;
+  }
   try {
+    // 1. 获取麦克风
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    state.learnMediaRecorder = new MediaRecorder(stream);
-    state.learnChunks = [];
-    state.learnMediaRecorder.ondataavailable = e => { if (e.data.size > 0) state.learnChunks.push(e.data); };
-    state.learnMediaRecorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      // 停止后保存 blob 供回放，然后转写 + 总结
-      const blob = new Blob(state.learnChunks, { type: 'audio/webm' });
-      state.lastLearnAudioBlob = blob;
-      await learnTranscribeAndSummarize(blob);
-    };
-    state.learnMediaRecorder.start(1000);
+    state.learnStream = stream;
     state.learnRecording = true;
+    state.learnPaused = false;
     state.learnSeconds = 0;
-    document.getElementById('learnBtn').textContent = '⏹ 停止';
+    state.learnChunks = [];
+
+    // 2. MediaRecorder 备份（供回放）
+    try {
+      state.learnMediaRecorder = new MediaRecorder(stream);
+      state.learnMediaRecorder.ondataavailable = e => { if (e.data.size > 0) state.learnChunks.push(e.data); };
+      state.learnMediaRecorder.start(5000);
+    } catch (_) {}
+
+    // 3. AudioContext + ScriptProcessorNode 实时采集 PCM
+    let audioCtx;
+    try {
+      audioCtx = new AudioContext({ sampleRate: 16000 });
+    } catch (_) {
+      audioCtx = new AudioContext();
+    }
+    state.learnAudioCtx = audioCtx;
+    const source = audioCtx.createMediaStreamSource(stream);
+    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    state.learnProcessor = processor;
+
+    // 4. WebSocket 实时转写
+    const ws = new WebSocket('ws://localhost:' + location.port + '/ws/transcribe?key=' + encodeURIComponent(apiKey));
+    state.learnSttWs = ws;
+
+    ws.onopen = () => {
+      document.getElementById('learnLiveBadge').className = 'rec-live on';
+      document.getElementById('learnStatus').textContent = '录音中 · 实时转写';
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'transcript') {
+          const el = document.getElementById('learnText');
+          el.value = msg.text;
+          el.scrollTop = el.scrollHeight;
+        } else if (msg.type === 'done') {
+          const el = document.getElementById('learnText');
+          el.value = msg.text;
+          el.scrollTop = el.scrollHeight;
+          document.getElementById('learnStatus').textContent = '转写完成，正在生成沟通总结...';
+          document.getElementById('learnLiveBadge').className = 'rec-live off';
+          // 转写完成后自动生成AI总结
+          learnGenerateSummary(msg.text);
+        } else if (msg.type === 'error') {
+          document.getElementById('learnStatus').textContent = '转写出错: ' + msg.message;
+        }
+      } catch (_) {}
+    };
+
+    ws.onerror = () => {
+      document.getElementById('learnLiveBadge').className = 'rec-live off';
+    };
+    ws.onclose = () => {
+      document.getElementById('learnLiveBadge').className = 'rec-live off';
+    };
+
+    // 5. PCM 采集 + 发送
+    let resampleBuf = new Float32Array(0);
+    const srcRate = audioCtx.sampleRate;
+    const needResample = srcRate !== 16000;
+
+    processor.onaudioprocess = (e) => {
+      if (state.learnPaused || !state.learnRecording) return;
+      const input = e.inputBuffer.getChannelData(0);
+
+      let samples;
+      if (needResample) {
+        const combined = new Float32Array(resampleBuf.length + input.length);
+        combined.set(resampleBuf, 0);
+        combined.set(input, resampleBuf.length);
+        const ratio = srcRate / 16000;
+        const outLen = Math.floor(combined.length / ratio);
+        samples = new Float32Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+          samples[i] = combined[Math.floor(i * ratio)];
+        }
+        const remain = combined.length - Math.floor(outLen * ratio);
+        resampleBuf = remain > 0 ? combined.slice(-remain) : new Float32Array(0);
+      } else {
+        samples = input;
+      }
+
+      const pcm = new Int16Array(samples.length);
+      for (let i = 0; i < samples.length; i++) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+
+      const currentWs = state.learnSttWs;
+      if (currentWs && currentWs.readyState === WebSocket.OPEN) {
+        currentWs.send(new Uint8Array(pcm.buffer));
+      }
+    };
+
+    source.connect(processor);
+    processor.connect(audioCtx.destination);
+
+    // 6. 更新 UI
+    document.getElementById('learnBtn').disabled = true;
     document.getElementById('learnStopBtn').disabled = false;
-    document.getElementById('learnPauseBtn').classList.add('show');
-    state.learnTimer = setInterval(() => {
+    document.getElementById('learnPauseBtn').style.display = 'inline-flex';
+    document.getElementById('learnPauseBtn').textContent = '⏸ 暂停';
+    document.getElementById('learnText').value = '';
+    document.getElementById('learnSummary').value = '';
+    document.getElementById('learnSaveBtn').disabled = true;
+    state.learnTimerVar = setInterval(() => {
       state.learnSeconds++;
       document.getElementById('learnTimer').textContent = fmtTime(state.learnSeconds);
     }, 1000);
-    showToast('开始学习录音', 'info');
+    showToast('开始学习录音（实时转写已启用）', 'info');
   } catch (e) {
     showToast('无法访问麦克风: ' + e.message, 'error');
   }
 }
 
-function stopLearn() {
-  if (!state.learnRecording) return;
-  state.learnMediaRecorder.stop();
-  state.learnRecording = false;
-  state.learnPaused = false;
-  clearInterval(state.learnTimer);
-  document.getElementById('learnBtn').textContent = '🔴 开始学习录音';
-  document.getElementById('learnStopBtn').disabled = true;
-  document.getElementById('learnPauseBtn').classList.remove('show');
-  document.getElementById('learnPauseBtn').textContent = '⏸ 暂停';
-}
-
 function toggleLearnPause() {
-  if (!state.learnRecording || !state.learnMediaRecorder) return;
+  if (!state.learnRecording) return;
   if (state.learnPaused) {
-    try { if (state.learnMediaRecorder.state === 'paused') state.learnMediaRecorder.resume(); } catch(e) {}
+    // 恢复
+    // 检查WebSocket是否存活，断开则重连
+    if (!state.learnSttWs || state.learnSttWs.readyState !== WebSocket.OPEN) {
+      // 需要重连WebSocket（类似病历录音的 reconnectSttWs）
+      reconnectLearnWs();
+    }
+    try { if (state.learnMediaRecorder && state.learnMediaRecorder.state === 'paused') state.learnMediaRecorder.resume(); } catch(e) {}
     state.learnPaused = false;
     document.getElementById('learnPauseBtn').textContent = '⏸ 暂停';
+    document.getElementById('learnStatus').textContent = '录音中 · 实时转写';
+    document.getElementById('learnLiveBadge').className = 'rec-live on';
     showToast('继续录音', 'info');
   } else {
-    try { if (state.learnMediaRecorder.state === 'recording') state.learnMediaRecorder.pause(); } catch(e) {}
+    // 暂停
+    try { if (state.learnMediaRecorder && state.learnMediaRecorder.state === 'recording') state.learnMediaRecorder.pause(); } catch(e) {}
     state.learnPaused = true;
+    // 暂停时发送keepalive防止WS断开
+    startLearnKeepAlive();
     document.getElementById('learnPauseBtn').textContent = '▶️ 继续';
-    showToast('已暂停', 'info');
+    document.getElementById('learnStatus').textContent = '已暂停 · 实时转写';
+    document.getElementById('learnLiveBadge').className = 'rec-live off';
+    showToast('录音已暂停', 'info');
+  }
+}
+
+function stopLearnRecording() {
+  if (!state.learnRecording) return;
+  state.learnRecording = false;
+  state.learnPaused = false;
+  stopLearnKeepAlive();
+  clearInterval(state.learnTimerVar);
+
+  // 关闭 WebSocket → 服务端发送 done 消息 → 触发 learnGenerateSummary
+  if (state.learnSttWs && state.learnSttWs.readyState === WebSocket.OPEN) {
+    state.learnSttWs.close();
+    state.learnSttWs = null;
+  }
+
+  // 停止 MediaRecorder 备份
+  if (state.learnMediaRecorder && state.learnMediaRecorder.state !== 'inactive') {
+    try { state.learnMediaRecorder.stop(); } catch(e) {}
+  }
+
+  // 保存音频 blob 供回放
+  if (state.learnChunks.length > 0) {
+    state.lastLearnAudioBlob = new Blob(state.learnChunks, { type: 'audio/webm' });
+  }
+
+  // 释放 AudioContext
+  if (state.learnAudioCtx) { try { state.learnAudioCtx.close(); } catch(e) {} state.learnAudioCtx = null; }
+  if (state.learnStream) { state.learnStream.getTracks().forEach(t => t.stop()); state.learnStream = null; }
+
+  // 更新 UI
+  document.getElementById('learnBtn').disabled = false;
+  document.getElementById('learnBtn').textContent = '🔴 开始学习录音';
+  document.getElementById('learnStopBtn').disabled = true;
+  document.getElementById('learnPauseBtn').style.display = 'none';
+  document.getElementById('learnLiveBadge').className = 'rec-live off';
+
+  // 如果 WebSocket 已断开但没有收到 done，用手动转写兜底
+  const text = document.getElementById('learnText').value.trim();
+  if (!text && state.lastLearnAudioBlob) {
+    document.getElementById('learnStatus').textContent = '实时转写未完成，正在手动转写...';
+    learnTranscribeFallbackAndSummarize(state.lastLearnAudioBlob);
+  } else if (text && !document.getElementById('learnSummary').value.trim()) {
+    learnGenerateSummary(text);
+  }
+}
+
+// KeepAlive：暂停时定期发送空PCM防止WS断开
+let learnKeepAliveTimer = null;
+function startLearnKeepAlive() {
+  learnKeepAliveTimer = setInterval(() => {
+    const ws = state.learnSttWs;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(new Uint8Array(0)); // 空包保活
+    }
+  }, 5000);
+}
+function stopLearnKeepAlive() {
+  if (learnKeepAliveTimer) { clearInterval(learnKeepAliveTimer); learnKeepAliveTimer = null; }
+}
+
+// WebSocket 重连
+async function reconnectLearnWs() {
+  const apiKey = getApiKeyForSTT();
+  if (!apiKey) return;
+  if (state.learnSttWs) { try { state.learnSttWs.close(); } catch(_) {} }
+  const ws = new WebSocket('ws://localhost:' + location.port + '/ws/transcribe?key=' + encodeURIComponent(apiKey));
+  state.learnSttWs = ws;
+  ws.onopen = () => { document.getElementById('learnLiveBadge').className = 'rec-live on'; };
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'transcript' || msg.type === 'done') {
+        const el = document.getElementById('learnText');
+        el.value = msg.text;
+        el.scrollTop = el.scrollHeight;
+        if (msg.type === 'done') {
+          document.getElementById('learnLiveBadge').className = 'rec-live off';
+          learnGenerateSummary(msg.text);
+        }
+      }
+    } catch(_) {}
+  };
+  ws.onerror = () => { document.getElementById('learnLiveBadge').className = 'rec-live off'; };
+  ws.onclose = () => { document.getElementById('learnLiveBadge').className = 'rec-live off'; };
+}
+
+// AI 生成沟通总结
+async function learnGenerateSummary(text) {
+  if (!text) return;
+  const key = state.settings.apiKey;
+  if (!key) { document.getElementById('learnStatus').textContent = '请填写 AI API Key'; return; }
+
+  document.getElementById('learnStatus').textContent = '正在生成沟通总结...';
+
+  try {
+    const summaryPrompt = `你是口腔门诊沟通教练。以下是医患沟通录音的转写文本，请帮助医生提升沟通能力。
+
+========== 转写文本 ==========
+${text}
+
+========== 请按以下格式输出 ==========
+## ✅ 沟通做得好的地方
+（具体指出医生做得好的地方，巩固优点）
+
+## ⚠️ 可以改进的地方
+（医生沟通中不恰当、遗漏、或表达不妥的地方，逐条具体说明）
+- 每条格式：问题描述 → 建议怎么说更好
+
+## 💡 话术建议
+（针对本次沟通，给出2-3条更优的话术示范）
+
+## 📋 患者核心诉求
+（一句话总结患者最关心的点）`;
+
+    const aiResp = await fetch(state.settings.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({
+        model: state.settings.model,
+        messages: [{ role: 'user', content: summaryPrompt }],
+        temperature: 0.3,
+      }),
+    });
+    const data = await aiResp.json();
+    const summary = data.choices?.[0]?.message?.content || '总结生成失败';
+    document.getElementById('learnSummary').value = summary;
+    document.getElementById('learnSaveBtn').disabled = false;
+    document.getElementById('learnStatus').textContent = '✅ 总结完成，可保存学习记录';
+    showToast('学习录音转写+总结完成', 'success');
+  } catch (e) {
+    document.getElementById('learnStatus').textContent = '总结失败: ' + e.message;
+    showToast('学习录音处理失败: ' + e.message, 'error');
+  }
+}
+
+// 手动转写兜底（WebSocket 断开时）
+async function learnTranscribeFallbackAndSummarize(blob) {
+  document.getElementById('learnStatus').textContent = '手动转写中...';
+  const text = await transcribeAudioFallback(blob);
+  if (text) {
+    document.getElementById('learnText').value = text;
+    await learnGenerateSummary(text);
+  } else {
+    document.getElementById('learnStatus').textContent = '转写为空';
   }
 }
 
@@ -2624,6 +2830,7 @@ function saveLearnRecord() {
     const records = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
     records.unshift(record);
     localStorage.setItem('dr_records_v2', JSON.stringify(records));
+    syncRecordToServer(record);
     loadHistory();
     showToast('学习记录已保存', 'success');
   };
@@ -3601,13 +3808,11 @@ async function loadAnalyticsData() {
 
   // 尝试从服务器读取合并数据（坚果云）
   let allRecords = [];
-  let fromServer = false;
   try {
     const resp = await fetch('/api/get-all-data');
     const data = await resp.json();
     if (data.records && data.records.length > 0) {
       allRecords = data.records;
-      fromServer = true;
     }
   } catch (_) {}
 
@@ -3615,63 +3820,16 @@ async function loadAnalyticsData() {
   if (allRecords.length === 0) {
     const localRecords = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
     allRecords = localRecords;
-    // 一次性迁移：将 localStorage 数据同步到服务端文件（仅首次）
-    const migrationDone = localStorage.getItem('dr_migration_done');
-    if (localRecords.length > 0 && !migrationDone) {
-      try {
-        const syncResp = await fetch('/api/bulk-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            records: localRecords,
-            clinicName: state.settings.clinicName || '',
-            doctorName: state.settings.doctorName || '',
-          }),
-        });
-        const syncResult = await syncResp.json();
-        console.log('[DR-AI] 数据迁移结果:', syncResult);
-        if (syncResult.ok) {
-          localStorage.setItem('dr_migration_done', '1');
-          infoEl.textContent = '数据迁移成功！已同步 ' + syncResult.added + ' 条记录到服务器';
-        }
-      } catch (e) {
-        console.log('[DR-AI] 数据迁移失败:', e.message);
-      }
-    }
   }
 
   // 解析画像字段（旧记录可能没有 profileFields）
-  let parsedCount = 0;
-  let emptyProfileCount = 0;
-  let parseFailCount = 0;
   for (const rec of allRecords) {
-    if (!rec.profileFields || Object.keys(rec.profileFields).length === 0) {
-      if (rec.profile) {
-        rec.profileFields = parseProfileFields(rec.profile);
-        if (Object.keys(rec.profileFields).length > 0) {
-          parsedCount++;
-        } else {
-          parseFailCount++; // 有画像文本但解析为空（格式不匹配）
-        }
-      } else {
-        emptyProfileCount++; // 完全没有画像文本
-      }
-    } else {
-      parsedCount++;
-    }
-  }
-  console.log('[DR-AI] 分析数据: 总记录=' + allRecords.length + ', 有画像=' + parsedCount + ', 无画像=' + emptyProfileCount + ', 解析失败=' + parseFailCount);
-  // 打印前3条记录的画像文本，帮助诊断
-  for (let i = 0; i < Math.min(3, allRecords.length); i++) {
-    console.log('[DR-AI] 记录#' + i, 'profile长度:', (allRecords[i].profile || '').length, 'profileFields:', JSON.stringify(allRecords[i].profileFields));
-    if (allRecords[i].profile) {
-      console.log('[DR-AI] 记录#' + i, '画像文本前200字:', allRecords[i].profile.slice(0, 200));
+    if (!rec.profileFields && rec.profile) {
+      rec.profileFields = parseProfileFields(rec.profile);
     }
   }
 
-  const sourceLabel = fromServer ? '多台电脑（坚果云）' : (allRecords.length > 0 ? '本机' : '无');
-  infoEl.textContent = '共 ' + allRecords.length + ' 条记录（来自 ' + sourceLabel + '）' +
-    (emptyProfileCount > 0 ? ' · ' + emptyProfileCount + ' 条缺少画像数据' : '');
+  infoEl.textContent = '共 ' + allRecords.length + ' 条记录（来自 ' + (allRecords.length > 0 ? (allRecords[0]._source ? '多台电脑' : '本机') : '无') + '）';
 
   if (allRecords.length === 0) {
     document.getElementById('analyticsContent').style.display = 'none';
