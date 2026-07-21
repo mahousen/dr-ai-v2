@@ -339,7 +339,7 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
     <div class="features">
       <div class="feat"><div class="feat-icon">🎙️</div><div>语音录音 → AI 自动生成规范病历</div></div>
       <div class="feat"><div class="feat-icon">📸</div><div>上传CT/X光片 → AI 生成治疗方案</div></div>
-      <div class="feat"><div class="feat-icon">📚</div><div>学习录音 → 提升接诊沟通技巧</div></div>
+      <div class="feat"><div class="feat-icon">📚</div><div>学习录音 → 参加培训录音总结学习要点</div></div>
       <div class="feat"><div class="feat-icon">📋</div><div>一键复制粘贴到 E看牙系统</div></div>
     </div>
   </div>
@@ -410,7 +410,7 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
             <div>✅ 首次使用请先前往 <strong>设置</strong> 填写 API Key</div>
             <div>✅ 录音写病历：录音 → 转写 → AI生成 → 复制粘贴</div>
             <div>✅ 治疗方案：上传影像 → AI分析 → 导出PDF给患者</div>
-            <div>✅ 学习录音：录制沟通话术 → 回放提升</div>
+            <div>✅ 学习录音：参加培训 → 录音转写 → AI提炼学习要点</div>
           </div>
         </div>
       </div>
@@ -510,7 +510,7 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
         </div>
         <!-- Communication Analysis -->
         <div class="rec-box" id="analysisResult" style="display:none;margin-top:16px">
-          <h3>🗣️ 沟通分析</h3>
+          <h3>🤖 AI 学习总结</h3>
           <div id="analysisContent" style="font-size:13px;line-height:1.8;white-space:pre-wrap;background:var(--gy1);padding:16px;border-radius:var(--rd)"></div>
         </div>
         <!-- Patient Profile -->
@@ -525,7 +525,7 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
     <div class="page" id="page-learn">
       <div class="learn-container">
         <div class="learn-bar">
-          <div class="ri"><label>主题：</label><input type="text" id="learnTopic" placeholder="沟通话术/开场白" style="width:160px"></div>
+          <div class="ri"><label>主题：</label><input type="text" id="learnTopic" placeholder="培训主题/课程名称" style="width:160px"></div>
           <div class="ri"><label>时长：</label><span id="learnTimer">00:00</span></div>
           <div class="ri">
             <span class="rec-live off" id="learnLiveBadge"><span class="rec-live-dot"></span>实时转写</span>
@@ -2207,10 +2207,10 @@ async function startLearnRecording() {
             el.value = msg.text;
           }
           el.scrollTop = el.scrollHeight;
-          document.getElementById('learnStatus').textContent = '转写完成，正在生成沟通总结...';
+          document.getElementById('learnStatus').textContent = '转写完成，正在生成学习总结...';
           document.getElementById('learnLiveBadge').className = 'rec-live off';
           // 转写完成后自动生成AI总结
-          learnGenerateSummary(msg.text);
+          learnGenerateSummary(msg.text, 'record');
         } else if (msg.type === 'error') {
           document.getElementById('learnStatus').textContent = '转写出错: ' + msg.message;
         }
@@ -2353,7 +2353,7 @@ function stopLearnRecording() {
     document.getElementById('learnStatus').textContent = '实时转写未完成，正在手动转写...';
     learnTranscribeFallbackAndSummarize(state.lastLearnAudioBlob);
   } else if (text) {
-    learnGenerateSummary(text);
+    learnGenerateSummary(text, 'record');
   }
 }
 
@@ -2403,7 +2403,7 @@ async function reconnectLearnWs() {
         }
         el.scrollTop = el.scrollHeight;
         document.getElementById('learnLiveBadge').className = 'rec-live off';
-        learnGenerateSummary(el.value);
+        learnGenerateSummary(el.value, 'record');
       }
     } catch(_) {}
   };
@@ -2446,25 +2446,27 @@ ${text}
 ## 🎯 行动清单
 （听完本次培训后，我应该立刻去做的事，3-5条具体行动）`;
   } else {
-    // 实时录音 → 沟通分析（适合医患沟通场景的现场学习）
-    summaryPrompt = `你是口腔门诊沟通教练。以下是医患沟通录音的转写文本，请帮助医生提升沟通能力。
+    // 实时录音 → 培训学习总结（本模块专用于参加培训学习）
+    summaryPrompt = `你是一位专业的学习教练和知识提炼专家。以下是一段培训/学习录音的实时转写文本，请帮助提炼核心内容。
 
 ========== 转写文本 ==========
 ${text}
 
 ========== 请按以下格式输出 ==========
-## ✅ 沟通做得好的地方
-（具体指出医生做得好的地方，巩固优点）
+## 📌 核心知识点
+（提炼本次培训的关键知识点，逐条列出，每条简洁清晰）
 
-## ⚠️ 可以改进的地方
-（医生沟通中不恰当、遗漏、或表达不妥的地方，逐条具体说明）
-- 每条格式：问题描述 → 建议怎么说更好
+## 💡 实操要点 & 方法论
+（培训中提到的可落地执行的方法、流程、技巧）
 
-## 💡 话术建议
-（针对本次沟通，给出2-3条更优的话术示范）
+## 🔑 关键金句
+（讲师最有价值的原话，3-5条，可直接引用）
 
-## 📋 患者核心诉求
-（一句话总结患者最关心的点）`;
+## ⚠️ 易错/易忽略点
+（培训中提到的常见误区、容易踩坑的地方）
+
+## 🎯 行动清单
+（听完本次培训后，我应该立刻去做的事，3-5条具体行动）`;
   }
 
   try {
@@ -2495,7 +2497,7 @@ async function learnTranscribeFallbackAndSummarize(blob) {
   const text = await transcribeAudioFallback(blob);
   if (text) {
     document.getElementById('learnText').value = text;
-    await learnGenerateSummary(text);
+    await learnGenerateSummary(text, 'record');
   } else {
     document.getElementById('learnStatus').textContent = '转写为空';
   }
