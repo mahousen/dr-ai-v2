@@ -105,6 +105,8 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
 .learn-bar{background:#fff;border-radius:var(--rd);padding:16px 20px;box-shadow:var(--sd);display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
 .learn-main{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .learn-box{background:#fff;border-radius:var(--rd);padding:20px;box-shadow:var(--sd)}
+.learn-upload-drop{background:var(--gy1);border:2px dashed var(--gy3);border-radius:var(--rd);padding:20px;text-align:center;cursor:pointer;transition:all .2s}
+.learn-upload-drop:hover{border-color:var(--blue);background:var(--bluel)}
 
 /* ========== HISTORY ========== */
 .hist-container{max-width:1000px;margin:0 auto}
@@ -534,14 +536,35 @@ input,select,textarea{font-family:inherit;font-size:13px;outline:none}
           <button class="btn btn-pause" id="learnPauseBtn" onclick="toggleLearnPause()" style="display:none">⏸ 暂停</button>
           <button class="btn btn-danger" id="learnStopBtn" onclick="stopLearnRecording()" disabled>⏹ 停止录音</button>
         </div>
-        <div style="margin-top:8px;font-size:11px;color:var(--gy5)">💡 边说边实时转写 · 结束录音后AI自动生成沟通总结</div>
+        <div style="margin-top:8px;font-size:11px;color:var(--gy5)">💡 边说边实时转写 · 结束录音后AI自动生成学习总结</div>
+
+        <!-- 上传录音文件 -->
+        <div class="learn-bar" style="margin-top:12px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:13px;color:var(--gy7);font-weight:600;width:100%">📁 上传培训录音文件</div>
+          <div class="learn-upload-drop" id="learnUploadDrop" onclick="document.getElementById('learnFileInput').click()"
+               ondragover="event.preventDefault();this.style.borderColor='var(--blue)';this.style.background='var(--bluel)'"
+               ondragleave="this.style.borderColor='var(--gy3)';this.style.background='var(--gy1)'"
+               ondrop="event.preventDefault();this.style.borderColor='var(--gy3)';this.style.background='var(--gy1)';handleLearnFileDrop(event.dataTransfer.files)">
+            <div style="font-size:28px;margin-bottom:4px">🎵</div>
+            <div style="font-size:12px;color:var(--gy5)">点击或拖拽上传培训录音文件<br>支持 MP3 / WAV / M4A / FLAC / OGG 格式</div>
+            <input type="file" id="learnFileInput" accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg,.webm" hidden onchange="handleLearnFileSelect(this)">
+          </div>
+          <div id="learnUploadProgress" style="display:none;width:100%">
+            <div style="height:6px;background:var(--gy2);border-radius:3px;overflow:hidden;margin-bottom:4px">
+              <div id="learnUploadFill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--blue),#06b6d4);border-radius:3px;transition:width .3s"></div>
+            </div>
+            <div style="font-size:12px;color:var(--gy5)" id="learnUploadStatus">准备上传...</div>
+          </div>
+          <div id="learnUploadFileInfo" style="display:none;width:100%;font-size:12px;color:var(--gy6);background:var(--bluel);padding:8px 12px;border-radius:var(--rd)"></div>
+        </div>
+
         <div class="learn-main">
           <div class="learn-box">
             <h3>📝 实时转写</h3>
             <textarea class="rec-textarea" id="learnText" placeholder="开始录音后，文字将实时显示在这里..." readonly></textarea>
           </div>
           <div class="learn-box">
-            <h3>🤖 AI 沟通总结</h3>
+            <h3>🤖 AI 学习总结</h3>
             <textarea class="rec-textarea" id="learnSummary" placeholder="AI 总结将显示在这里..."></textarea>
             <div style="margin-top:8px;display:flex;gap:8px">
               <button class="btn btn-outline" id="learnSaveBtn" onclick="saveLearnRecord()" disabled>💾 保存学习记录</button>
@@ -2130,6 +2153,7 @@ async function startLearnRecording() {
     state.learnPaused = false;
     state.learnSeconds = 0;
     state.learnChunks = [];
+    _learnSummaryCalled = false;
 
     // 2. MediaRecorder 备份（供回放）
     try {
@@ -2163,12 +2187,25 @@ async function startLearnRecording() {
       try {
         const msg = JSON.parse(e.data);
         if (msg.type === 'transcript') {
+          // 实时转写：累加到已有文本后面（重连后新文本追加到旧文本）
           const el = document.getElementById('learnText');
-          el.value = msg.text;
+          const existingText = el.value;
+          // msg.text 是本次任务的完整转写（含之前的句子），但重连后只含新句子
+          // 简单策略：如果 msg.text 以已有文本开头，直接替换；否则追加
+          if (existingText && !msg.text.startsWith(existingText.slice(0, 20))) {
+            el.value = existingText + '\n' + msg.text;
+          } else {
+            el.value = msg.text;
+          }
           el.scrollTop = el.scrollHeight;
         } else if (msg.type === 'done') {
           const el = document.getElementById('learnText');
-          el.value = msg.text;
+          const existingText = el.value;
+          if (existingText && !msg.text.startsWith(existingText.slice(0, 20))) {
+            el.value = existingText + '\n' + msg.text;
+          } else {
+            el.value = msg.text;
+          }
           el.scrollTop = el.scrollHeight;
           document.getElementById('learnStatus').textContent = '转写完成，正在生成沟通总结...';
           document.getElementById('learnLiveBadge').className = 'rec-live off';
@@ -2283,6 +2320,8 @@ function stopLearnRecording() {
 
   // 关闭 WebSocket → 服务端发送 done 消息 → 触发 learnGenerateSummary
   if (state.learnSttWs && state.learnSttWs.readyState === WebSocket.OPEN) {
+    // 先移除 onmessage 防止 done 消息和兜底代码双重触发
+    state.learnSttWs.onmessage = null;
     state.learnSttWs.close();
     state.learnSttWs = null;
   }
@@ -2308,23 +2347,25 @@ function stopLearnRecording() {
   document.getElementById('learnPauseBtn').style.display = 'none';
   document.getElementById('learnLiveBadge').className = 'rec-live off';
 
-  // 如果 WebSocket 已断开但没有收到 done，用手动转写兜底
+  // 如果没有触发 done 消息，用已有文本或手动转写兜底
   const text = document.getElementById('learnText').value.trim();
   if (!text && state.lastLearnAudioBlob) {
     document.getElementById('learnStatus').textContent = '实时转写未完成，正在手动转写...';
     learnTranscribeFallbackAndSummarize(state.lastLearnAudioBlob);
-  } else if (text && !document.getElementById('learnSummary').value.trim()) {
+  } else if (text) {
     learnGenerateSummary(text);
   }
 }
 
-// KeepAlive：暂停时定期发送空PCM防止WS断开
+// KeepAlive：暂停时定期发送静音帧防止WS断开（Paraformer ~20s无音频会断连）
 let learnKeepAliveTimer = null;
 function startLearnKeepAlive() {
   learnKeepAliveTimer = setInterval(() => {
     const ws = state.learnSttWs;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(new Uint8Array(0)); // 空包保活
+      // 160ms 静音 PCM (2560 samples × 2 bytes = 5.12KB)
+      const silencePcm = new Int16Array(2560);
+      ws.send(new Uint8Array(silencePcm.buffer));
     }
   }, 5000);
 }
@@ -2343,13 +2384,26 @@ async function reconnectLearnWs() {
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
-      if (msg.type === 'transcript' || msg.type === 'done') {
+      if (msg.type === 'transcript') {
         const el = document.getElementById('learnText');
-        el.value = msg.text;
+        const existingText = el.value;
+        if (existingText && !msg.text.startsWith(existingText.slice(0, 20))) {
+          el.value = existingText + '\n' + msg.text;
+        } else {
+          el.value = msg.text;
+        }
         el.scrollTop = el.scrollHeight;
-        if (msg.type === 'done') {
-          document.getElementById('learnLiveBadge').className = 'rec-live off';
-          learnGenerateSummary(msg.text);
+      } else if (msg.type === 'done') {
+        const el = document.getElementById('learnText');
+        const existingText = el.value;
+        if (existingText && !msg.text.startsWith(existingText.slice(0, 20))) {
+          el.value = existingText + '\n' + msg.text;
+        } else {
+          el.value = msg.text;
+        }
+        el.scrollTop = el.scrollHeight;
+        document.getElementById('learnLiveBadge').className = 'rec-live off';
+        learnGenerateSummary(el.value);
         }
       }
     } catch(_) {}
@@ -2358,16 +2412,43 @@ async function reconnectLearnWs() {
   ws.onclose = () => { document.getElementById('learnLiveBadge').className = 'rec-live off'; };
 }
 
-// AI 生成沟通总结
-async function learnGenerateSummary(text) {
-  if (!text) return;
+// AI 生成学习总结（防重复调用）
+let _learnSummaryCalled = false;
+async function learnGenerateSummary(text, mode) {
+  if (!text || _learnSummaryCalled) return;
+  _learnSummaryCalled = true;
   const key = state.settings.apiKey;
   if (!key) { document.getElementById('learnStatus').textContent = '请填写 AI API Key'; return; }
 
-  document.getElementById('learnStatus').textContent = '正在生成沟通总结...';
+  document.getElementById('learnStatus').textContent = '正在生成学习总结...';
 
-  try {
-    const summaryPrompt = `你是口腔门诊沟通教练。以下是医患沟通录音的转写文本，请帮助医生提升沟通能力。
+  // 根据模式选择不同的提示词
+  let summaryPrompt;
+  if (mode === 'upload') {
+    // 上传培训录音 → 提取知识点和学习要点
+    summaryPrompt = `你是一位专业的学习教练和知识提炼专家。以下是一段培训/学习录音的转写文本，请帮助提炼核心内容。
+
+========== 转写文本 ==========
+${text}
+
+========== 请按以下格式输出 ==========
+## 📌 核心知识点
+（提炼本次培训的关键知识点，逐条列出，每条简洁清晰）
+
+## 💡 实操要点 & 方法论
+（培训中提到的可落地执行的方法、流程、技巧）
+
+## 🔑 关键金句
+（讲师最有价值的原话，3-5条，可直接引用）
+
+## ⚠️ 易错/易忽略点
+（培训中提到的常见误区、容易踩坑的地方）
+
+## 🎯 行动清单
+（听完本次培训后，我应该立刻去做的事，3-5条具体行动）`;
+  } else {
+    // 实时录音 → 沟通分析（适合医患沟通场景的现场学习）
+    summaryPrompt = `你是口腔门诊沟通教练。以下是医患沟通录音的转写文本，请帮助医生提升沟通能力。
 
 ========== 转写文本 ==========
 ${text}
@@ -2385,7 +2466,9 @@ ${text}
 
 ## 📋 患者核心诉求
 （一句话总结患者最关心的点）`;
+  }
 
+  try {
     const aiResp = await fetch(state.settings.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
@@ -2416,6 +2499,102 @@ async function learnTranscribeFallbackAndSummarize(blob) {
     await learnGenerateSummary(text);
   } else {
     document.getElementById('learnStatus').textContent = '转写为空';
+  }
+}
+
+// ========== 上传录音文件分析 ==========
+function handleLearnFileDrop(files) {
+  if (!files || !files.length) return;
+  const file = files[0];
+  if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|m4a|flac|ogg|webm)$/i)) {
+    showToast('请上传音频文件（MP3/WAV/M4A/FLAC/OGG）', 'error');
+    return;
+  }
+  uploadLearnFile(file);
+}
+
+function handleLearnFileSelect(input) {
+  if (!input.files || !input.files.length) return;
+  uploadLearnFile(input.files[0]);
+  input.value = '';
+}
+
+async function uploadLearnFile(file) {
+  const apiKey = getApiKeyForSTT();
+  if (!apiKey) {
+    showToast('请先在设置中配置 API Key', 'error');
+    return;
+  }
+
+  // 显示文件信息
+  const fileInfo = document.getElementById('learnUploadFileInfo');
+  fileInfo.style.display = 'block';
+  fileInfo.textContent = '📎 ' + file.name + ' (' + formatSize(file.size) + ')';
+
+  // 显示进度条
+  const progressDiv = document.getElementById('learnUploadProgress');
+  progressDiv.style.display = 'block';
+  document.getElementById('learnUploadFill').style.width = '5%';
+  document.getElementById('learnUploadFill').style.background = 'linear-gradient(90deg,var(--blue),#06b6d4)';
+  document.getElementById('learnUploadStatus').textContent = '上传中...';
+  document.getElementById('learnStatus').textContent = '上传录音文件中...';
+
+  // 禁用上传区域防止重复
+  document.getElementById('learnUploadDrop').style.pointerEvents = 'none';
+  document.getElementById('learnUploadDrop').style.opacity = '0.5';
+
+  try {
+    const startTime = Date.now();
+
+    // 发送到 turbo 转写端点
+    const resp = await fetch('/api/transcribe-turbo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type || 'audio/mpeg',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: file
+    });
+
+    document.getElementById('learnUploadFill').style.width = '60%';
+    document.getElementById('learnUploadStatus').textContent = '语音转写中，请耐心等待...';
+    document.getElementById('learnStatus').textContent = '语音转写中，请耐心等待...';
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || '转写失败 HTTP ' + resp.status);
+    }
+
+    const result = await resp.json();
+    if (!result.text || !result.text.trim()) {
+      throw new Error('转写结果为空，请确认录音内容是否清晰');
+    }
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+    const durMin = result.duration ? Math.round(result.duration / 60) : '?';
+
+    // 显示转写结果
+    document.getElementById('learnUploadFill').style.width = '100%';
+    document.getElementById('learnUploadStatus').textContent = '✅ 转写完成 · 音频' + durMin + '分钟 · 耗时' + elapsed + '秒';
+    document.getElementById('learnText').value = result.text;
+    document.getElementById('learnTimer').textContent = result.duration ? fmtTime(Math.round(result.duration)) : '--:--';
+    state.learnSeconds = Math.round(result.duration || 0);
+    document.getElementById('learnStatus').textContent = '转写完成，正在生成学习总结...';
+
+    // 自动生成AI学习总结（使用培训分析提示词）
+    _learnSummaryCalled = false;
+    await learnGenerateSummary(result.text, 'upload');
+
+  } catch (e) {
+    document.getElementById('learnUploadFill').style.width = '100%';
+    document.getElementById('learnUploadFill').style.background = 'var(--red)';
+    document.getElementById('learnUploadStatus').textContent = '❌ 失败: ' + e.message;
+    document.getElementById('learnStatus').textContent = '上传转写失败: ' + e.message;
+    showToast('录音文件处理失败: ' + e.message, 'error');
+  } finally {
+    // 恢复上传区域
+    document.getElementById('learnUploadDrop').style.pointerEvents = '';
+    document.getElementById('learnUploadDrop').style.opacity = '';
   }
 }
 
