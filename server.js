@@ -112,7 +112,7 @@ const MIME = {
 };
 
 // ---- 百炼 STT ----
-function dashScopeSTT(pcmBuffer, apiKey) {
+function dashScopeSTT(pcmBuffer, apiKey, mode) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(DASHSCOPE_WS, {
       headers: { Authorization: `Bearer ${apiKey}` }
@@ -134,6 +134,8 @@ function dashScopeSTT(pcmBuffer, apiKey) {
 
     ws.on('open', () => {
       const DENTAL_CTX = '口腔门诊 牙齿 种植牙 根管治疗 拔牙 补牙 正畸 牙冠 牙周炎 龋齿 牙髓炎 智齿 牙周病 洗牙 烤瓷牙 全瓷牙 贴面 义齿 充填 根尖炎 楔状缺损 牙结石 牙龈出血 阻生齿 颞下颌 口腔黏膜 氟斑牙 牙外伤 根尖周病 牙龈炎 龈下刮治 牙体缺损 嵌体 光固化 粘接 牙槽骨 口腔修复 口腔外科 口腔内科 全口义齿 可摘义齿 固定桥 种植体 基台 覆盖义齿 软组织缝合 暂封 封闭剂 涂氟 固位钉';
+      const LEARN_CTX = '培训课程 学习笔记 经营管理 营销策略 团队建设 客户服务 沟通技巧 领导力 绩效管理 目标管理 时间管理 质量控制 成本核算 人才培养 业务拓展 流程优化 复盘总结 落地执行 创新思维 数据分析 战略规划 品牌建设 薪酬激励 组织架构 口腔医学 临床技能 医患沟通';
+      const ctxText = (mode === 'learn') ? LEARN_CTX : DENTAL_CTX;
       ws.send(JSON.stringify({
         header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
         payload: {
@@ -142,7 +144,7 @@ function dashScopeSTT(pcmBuffer, apiKey) {
           function: 'recognition',
           model: 'fun-asr-realtime',
           parameters: { format: 'pcm', sample_rate: 16000, language_hints: ['zh'] },
-          input: { context: [{ role: 'user', content: [{ type: 'input_text', text: DENTAL_CTX }] }] }
+          input: { context: [{ role: 'user', content: [{ type: 'input_text', text: ctxText }] }] }
         }
       }));
     });
@@ -230,8 +232,8 @@ function log(msg) {
 try { fs.writeFileSync(LOG_FILE, ''); } catch (_) {}
 
 // ---- 实时 STT WebSocket 中继 ----
-function handleSttStream(browserWs, apiKey) {
-  log('STT-WS: 新连接, key=' + apiKey.slice(0, 8) + '...');
+function handleSttStream(browserWs, apiKey, mode) {
+  log('STT-WS: 新连接, key=' + apiKey.slice(0, 8) + ', mode=' + (mode || 'medical'));
   const dashWs = new WebSocket(DASHSCOPE_WS, {
     headers: { Authorization: `Bearer ${apiKey}` }
   });
@@ -248,15 +250,20 @@ function handleSttStream(browserWs, apiKey) {
   }
 
   dashWs.on('open', () => {
-    log('STT-WS: 百炼WS已连接, 发送run-task(含口腔术语上下文)');
-    const DENTAL_CTX = '口腔门诊 牙齿 种植牙 根管治疗 拔牙 补牙 正畸 牙冠 牙周炎 龋齿 牙髓炎 智齿 牙周病 洗牙 烤瓷牙 全瓷牙 贴面 义齿 充填 根尖炎 楔状缺损 牙结石 牙龈出血 阻生齿 颞下颌 口腔黏膜 氟斑牙 牙外伤 根尖周病 牙龈炎 龈下刮治 牙体缺损 嵌体 光固化 粘接 牙槽骨 口腔修复 口腔外科 口腔内科 全口义齿 可摘义齿 固定桥 种植体 基台 覆盖义齿 软组织缝合 暂封 封闭剂 涂氟 固位钉';
+    // 病历模块(medical)→口腔术语context；学习模块(learn)→通用培训学习context
+    const DENTAL_CTX = '口腔门诊 牙齿 种植牙 根管治疗 拔牙 补牙 正畸 牙冠 牙周炎 龋齿 牙髓炎 智齿 牙周病 洗牙 烤瓷牙 全瓷牙 贴面 义齿 充填 根尖炎 楔状缺损 牙结石 牙龈出血 阻生齿 颙下颌 口腔黏膜 氟斑牙 牙外伤 根尖周病 牙龈炎 龈下刮治 牙体缺损 嵌体 光固化 粘接 牙槽骨 口腔修复 口腔外科 口腔内科 全口义齿 可摘义齿 固定桥 种植体 基台 覆盖义齿 软组织缝合 暂封 封闭剂 涂氟 固位钉';
+    const LEARN_CTX = '培训课程 学习笔记 经营管理 营销策略 团队建设 客户服务 沟通技巧 领导力 绩效管理 目标管理 时间管理 质量控制 成本核算 人才培养 业务拓展 流程优化 复盘总结 落地执行 创新思维 数据分析 战略规划 品牌建设 薪酬激励 组织架构 口腔医学 临床技能 医患沟通';
+    const ctxText = (mode === 'learn') ? LEARN_CTX : DENTAL_CTX;
+    const ctxLabel = (mode === 'learn') ? '培训学习' : '口腔术语';
+    log('STT-WS: 百炼WS已连接, 发送run-task(含' + ctxLabel + '上下文)');
+
     dashWs.send(JSON.stringify({
       header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
       payload: {
         task_group: 'audio', task: 'asr', function: 'recognition',
         model: 'fun-asr-realtime',
         parameters: { format: 'pcm', sample_rate: 16000, language_hints: ['zh'] },
-        input: { context: [{ role: 'user', content: [{ type: 'input_text', text: DENTAL_CTX }] }] }
+        input: { context: [{ role: 'user', content: [{ type: 'input_text', text: ctxText }] }] }
       }
     }));
   });
@@ -499,7 +506,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   // STT 转写
-  if (req.method === 'POST' && req.url === '/api/transcribe') {
+  if (req.method === 'POST' && (req.url === '/api/transcribe' || req.url.startsWith('/api/transcribe?'))) {
+    const parsedUrl = new URL(req.url, 'http://localhost:' + PORT);
+    const mode = parsedUrl.searchParams.get('mode') || 'medical';
     const auth = req.headers['authorization'] || '';
     const apiKey = auth.startsWith('Bearer ') ? auth.slice(7) : '';
 
@@ -514,9 +523,9 @@ const server = http.createServer(async (req, res) => {
     req.on('data', c => chunks.push(c));
     req.on('end', async () => {
       const pcm = Buffer.concat(chunks);
-      log(`STT-HTTP: 收到PCM ${pcm.length}字节, key=${apiKey.slice(0,8)}...`);
+      log(`STT-HTTP: 收到PCM ${pcm.length}字节, mode=${mode}, key=${apiKey.slice(0,8)}...`);
       try {
-        const text = await dashScopeSTT(pcm, apiKey);
+        const text = await dashScopeSTT(pcm, apiKey, mode);
         console.log(`[STT] 转写成功: "${text.slice(0,50)}${text.length>50?'...':''}" (${text.length}字)`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ text }));
@@ -701,7 +710,8 @@ server.on('upgrade', (req, socket, head) => {
         return;
       }
       wss.handleUpgrade(req, socket, head, (ws) => {
-        handleSttStream(ws, apiKey);
+        const mode = url.searchParams.get('mode') || 'medical';  // medical=病历(口腔术语) learn=学习录音(通用培训)
+        handleSttStream(ws, apiKey, mode);
       });
     } else {
       socket.destroy();
