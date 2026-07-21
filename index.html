@@ -968,41 +968,41 @@ try {
 function parseProfileFields(text) {
   if (!text) return {};
   const r = {};
-  // 性别
-  const gm = text.match(/性别[：:]\s*(男|女|未知)/);
+  // 性别（兼容 "- 性别：男"、"性别：男" 等格式）
+  const gm = text.match(/[-•*]?\s*性别[：:]\s*(男|女|未知)/);
   if (gm) r.gender = gm[1];
-  // 年龄段
-  const am = text.match(/年龄段[：:]\s*(儿童|青少年|青年|中年|老年|未知)/);
+  // 年龄段（兼容 "年龄段"、"大致年龄段"）
+  const am = text.match(/[-•*]?\s*(?:大致)?年龄段[：:]\s*(儿童|青少年|青年|中年|老年|未知)/);
   if (am) r.ageGroup = am[1];
-  // 主诉
-  const cm = text.match(/主诉问题[：:]\s*(.+)/);
+  // 主诉（兼容 "主诉问题"、"主诉"）
+  const cm = text.match(/[-•*]?\s*主诉(?:问题)?[：:]\s*(.+)/);
   if (cm) r.chiefComplaint = cm[1].trim().slice(0, 50);
   // 就诊动机
-  const mm = text.match(/就诊动机[：:]\s*(.+)/);
+  const mm = text.match(/[-•*]?\s*就诊动机[：:]\s*(.+)/);
   if (mm) r.motivation = mm[1].trim().slice(0, 30);
   // 消费意愿
-  const wm = text.match(/消费意愿[：:]\s*(高|中|低)/);
+  const wm = text.match(/[-•*]?\s*消费意愿[：:]\s*(高|中|低)/);
   if (wm) r.willingness = wm[1];
-  // 价格敏感度
-  const pm = text.match(/价格.*敏感度[：:]\s*(高|中|低)/);
+  // 价格敏感度（兼容 "价格敏感度"、"对价格的敏感度"）
+  const pm = text.match(/[-•*]?\s*(?:对价格的|价格.*?)敏感度[：:]\s*(高|中|低)/);
   if (pm) r.priceSensitivity = pm[1];
   // 沟通风格
-  const sm = text.match(/沟通风格[：:]\s*(理性型|焦虑型|随和型|挑剔型|未知)/);
+  const sm = text.match(/[-•*]?\s*沟通风格[：:]\s*(理性型|焦虑型|随和型|挑剔型|未知)/);
   if (sm) r.communicationStyle = sm[1];
   // 决策模式
-  const dm = text.match(/决策模式[：:]\s*(自主决定|需家人商量|依赖医生建议|未知)/);
+  const dm = text.match(/[-•*]?\s*决策模式[：:]\s*(自主决定|需家人商量|依赖医生建议|未知)/);
   if (dm) r.decisionMode = dm[1];
-  // 成交意向等级
-  const im = text.match(/成交意向等级[：:]\s*[🔴🟡🟢]\s*(高|中|低)/);
+  // 成交意向等级（兼容 emoji 后有空格/无空格）
+  const im = text.match(/[-•*]?\s*成交意向等级[：:]\s*[🔴🟡🟢⭐]?\s*(高|中|低)/);
   if (im) r.intention = im[1];
   // 关注维度列表（▶标注的）
   const concernLines = text.match(/▶\s*(.+)/g);
-  if (concernLines) r.keyConcerns = concernLines.map(l => l.replace('▶ ', '').trim().slice(0, 20));
+  if (concernLines) r.keyConcerns = concernLines.map(l => l.replace(/▶\s*/, '').trim().slice(0, 20));
   // 流失风险
-  const rm = text.match(/流失风险[：:]\s*(高|中|低)/);
+  const rm = text.match(/[-•*]?\s*流失风险[：:]\s*(高|中|低)/);
   if (rm) r.riskLevel = rm[1];
   // 口腔卫生习惯
-  const hm = text.match(/口腔卫生习惯[：:]\s*(.+)/);
+  const hm = text.match(/[-•*]?\s*口腔卫生习惯[：:]\s*(.+)/);
   if (hm) r.hygieneHabit = hm[1].trim().slice(0, 40);
   return r;
 }
@@ -3808,28 +3808,72 @@ async function loadAnalyticsData() {
 
   // 尝试从服务器读取合并数据（坚果云）
   let allRecords = [];
+  let serverHasData = false;
   try {
     const resp = await fetch('/api/get-all-data');
     const data = await resp.json();
     if (data.records && data.records.length > 0) {
       allRecords = data.records;
+      serverHasData = true;
     }
   } catch (_) {}
 
-  // 如果服务器没有数据，从 localStorage 补充
-  if (allRecords.length === 0) {
+  // 如果服务器没有数据，从 localStorage 补充，并一次性迁移到服务端
+  if (!serverHasData) {
     const localRecords = JSON.parse(localStorage.getItem('dr_records_v2') || '[]');
     allRecords = localRecords;
-  }
 
-  // 解析画像字段（旧记录可能没有 profileFields）
-  for (const rec of allRecords) {
-    if (!rec.profileFields && rec.profile) {
-      rec.profileFields = parseProfileFields(rec.profile);
+    // 一次性迁移：localStorage → 服务端（有标记避免重复）
+    if (localRecords.length > 0 && !localStorage.getItem('dr_data_migrated_v2')) {
+      try {
+        const syncResp = await fetch('/api/bulk-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            records: localRecords,
+            clinicName: state.settings.clinicName || '',
+            doctorName: state.settings.doctorName || '',
+          }),
+        });
+        const syncResult = await syncResp.json();
+        if (syncResult.ok) {
+          localStorage.setItem('dr_data_migrated_v2', '1');
+          console.log('[DR-AI] 数据迁移成功：' + syncResult.added + ' 条记录');
+        }
+      } catch (e) {
+        console.log('[DR-AI] 数据迁移失败:', e.message);
+      }
     }
   }
 
-  infoEl.textContent = '共 ' + allRecords.length + ' 条记录（来自 ' + (allRecords.length > 0 ? (allRecords[0]._source ? '多台电脑' : '本机') : '无') + '）';
+  // 解析画像字段（旧记录可能没有 profileFields）
+  let parsedCount = 0;
+  let emptyProfileCount = 0;
+  let parseFailCount = 0;
+  for (const rec of allRecords) {
+    if (!rec.profileFields || Object.keys(rec.profileFields).length === 0) {
+      if (rec.profile) {
+        rec.profileFields = parseProfileFields(rec.profile);
+        if (Object.keys(rec.profileFields).length > 0) {
+          parsedCount++;
+        } else {
+          parseFailCount++;
+        }
+      } else {
+        emptyProfileCount++;
+      }
+    } else {
+      parsedCount++;
+    }
+  }
+  console.log('[DR-AI] 分析数据: 总=' + allRecords.length + ', 有画像=' + parsedCount + ', 无画像文本=' + emptyProfileCount + ', 解析失败=' + parseFailCount);
+
+  const hasProfile = allRecords.filter(r => r.profileFields && Object.keys(r.profileFields).length > 0);
+  let infoText = '共 ' + allRecords.length + ' 条记录';
+  if (serverHasData) infoText += '（来自多台电脑）';
+  if (emptyProfileCount > 0) infoText += ' · ' + emptyProfileCount + '条缺少画像数据';
+  if (parseFailCount > 0) infoText += ' · ' + parseFailCount + '条画像解析未匹配';
+  infoEl.textContent = infoText;
 
   if (allRecords.length === 0) {
     document.getElementById('analyticsContent').style.display = 'none';
