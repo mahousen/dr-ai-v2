@@ -2164,6 +2164,11 @@ async function startLearnRecording() {
     state.learnSeconds = 0;
     state.learnChunks = [];
     _learnSummaryCalled = false;
+    _learnWsReconnectCount = 0;
+    _learnSessionPrefix = '';
+    _learnStartWall = Date.now();
+    _learnPausedMs = 0;
+    _learnPauseStart = 0;
 
     // 2. MediaRecorder 备份（供回放）
     try {
@@ -2189,6 +2194,7 @@ async function startLearnRecording() {
     state.learnSttWs = ws;
 
     ws.onopen = () => {
+      _learnWsReconnectCount = 0;  // 连接成功，重置重连计数
       document.getElementById('learnLiveBadge').className = 'rec-live on';
       document.getElementById('learnStatus').textContent = '录音中 · 实时转写';
     };
@@ -2197,32 +2203,28 @@ async function startLearnRecording() {
       try {
         const msg = JSON.parse(e.data);
         if (msg.type === 'transcript') {
-          // 实时转写：累加到已有文本后面（重连后新文本追加到旧文本）
+          // 实时转写：当前session的累积文本，拼接前段文本
           const el = document.getElementById('learnText');
-          const existingText = el.value;
-          // msg.text 是本次任务的完整转写（含之前的句子），但重连后只含新句子
-          // 简单策略：如果 msg.text 以已有文本开头，直接替换；否则追加
-          if (existingText && !msg.text.startsWith(existingText.slice(0, 20))) {
-            el.value = existingText + '\n' + msg.text;
-          } else {
-            el.value = msg.text;
-          }
+          el.value = _learnSessionPrefix + msg.text;
           el.scrollTop = el.scrollHeight;
         } else if (msg.type === 'done') {
           const el = document.getElementById('learnText');
-          const existingText = el.value;
-          if (existingText && !msg.text.startsWith(existingText.slice(0, 20))) {
-            el.value = existingText + '\n' + msg.text;
-          } else {
-            el.value = msg.text;
-          }
+          el.value = _learnSessionPrefix + msg.text;
           el.scrollTop = el.scrollHeight;
-          document.getElementById('learnStatus').textContent = '转写完成，正在生成学习总结...';
           document.getElementById('learnLiveBadge').className = 'rec-live off';
-          // 转写完成后自动生成AI总结（用 el.value 确保用累积文本）
-          learnGenerateSummary(el.value, 'record');
+          // 只在录音已停止时才生成总结（录音进行中收到done是session结束，将自动重连）
+          if (!state.learnRecording) {
+            document.getElementById('learnStatus').textContent = '转写完成，正在生成学习总结...';
+            learnGenerateSummary(el.value, 'record');
+          } else {
+            document.getElementById('learnStatus').textContent = '转写会话结束，正在自动重连...';
+          }
         } else if (msg.type === 'error') {
-          document.getElementById('learnStatus').textContent = '转写出错: ' + msg.message;
+          if (state.learnRecording) {
+            document.getElementById('learnStatus').textContent = '转写服务暂时断开，正在自动重连...';
+          } else {
+            document.getElementById('learnStatus').textContent = '转写出错: ' + msg.message;
+          }
         }
       } catch (_) {}
     };
@@ -2232,6 +2234,18 @@ async function startLearnRecording() {
     };
     ws.onclose = () => {
       document.getElementById('learnLiveBadge').className = 'rec-live off';
+      // 录音仍在进行 → 自动重连（最多5次）
+      if (state.learnRecording && !state.learnPaused && _learnWsReconnectCount < MAX_LEARN_WS_RECONNECTS) {
+        document.getElementById('learnStatus').textContent = '转写服务重连中(第' + (_learnWsReconnectCount + 1) + '次)...';
+        _learnReconnectTimer = setTimeout(() => {
+          if (state.learnRecording && !state.learnPaused) {
+            reconnectLearnWs();
+          }
+        }, 1000);
+      } else if (state.learnRecording && _learnWsReconnectCount >= MAX_LEARN_WS_RECONNECTS) {
+        document.getElementById('learnStatus').textContent = '⚠️ 转写服务多次断开，建议停止后重新开始';
+        showToast('转写服务连接不稳定，建议停止录音', 'error');
+      }
     };
 
     // 5. PCM 采集 + 发送
@@ -2275,7 +2289,14 @@ async function startLearnRecording() {
     source.connect(processor);
     processor.connect(audioCtx.destination);
 
-    // 6. 更新 UI
+    // AudioContext 挂起恢复（浏览器切后台时会suspend）
+    audioCtx.onstatechange = () => {
+      if (audioCtx.state === 'suspended' && state.learnRecording && !state.learnPaused) {
+        audioCtx.resume();
+      }
+    };
+
+    // 6. 更新 UI + 墙钟计时器（不受浏览器节流影响）
     document.getElementById('learnBtn').disabled = true;
     document.getElementById('learnStopBtn').disabled = false;
     document.getElementById('learnPauseBtn').style.display = 'inline-flex';
@@ -2284,8 +2305,10 @@ async function startLearnRecording() {
     document.getElementById('learnSummary').value = '';
     document.getElementById('learnSaveBtn').disabled = true;
     state.learnTimerVar = setInterval(() => {
-      state.learnSeconds++;
-      document.getElementById('learnTimer').textContent = fmtTime(state.learnSeconds);
+      const totalPaused = _learnPausedMs + (state.learnPaused ? (Date.now() - _learnPauseStart) : 0);
+      const elapsed = Math.floor((Date.now() - _learnStartWall - totalPaused) / 1000);
+      state.learnSeconds = elapsed;
+      document.getElementById('learnTimer').textContent = fmtTime(elapsed);
     }, 1000);
     showToast('开始学习录音（实时转写已启用）', 'info');
   } catch (e) {
@@ -2297,6 +2320,8 @@ function toggleLearnPause() {
   if (!state.learnRecording) return;
   if (state.learnPaused) {
     // 恢复
+    // 累加暂停时长（用于墙钟计时）
+    _learnPausedMs += Date.now() - _learnPauseStart;
     // 检查WebSocket是否存活，断开则重连
     if (!state.learnSttWs || state.learnSttWs.readyState !== WebSocket.OPEN) {
       // 需要重连WebSocket（类似病历录音的 reconnectSttWs）
@@ -2304,6 +2329,10 @@ function toggleLearnPause() {
     }
     try { if (state.learnMediaRecorder && state.learnMediaRecorder.state === 'paused') state.learnMediaRecorder.resume(); } catch(e) {}
     state.learnPaused = false;
+    // 恢复AudioContext（可能被浏览器挂起）
+    if (state.learnAudioCtx && state.learnAudioCtx.state === 'suspended') {
+      state.learnAudioCtx.resume();
+    }
     document.getElementById('learnPauseBtn').textContent = '⏸ 暂停';
     document.getElementById('learnStatus').textContent = '录音中 · 实时转写';
     document.getElementById('learnLiveBadge').className = 'rec-live on';
@@ -2312,6 +2341,7 @@ function toggleLearnPause() {
     // 暂停
     try { if (state.learnMediaRecorder && state.learnMediaRecorder.state === 'recording') state.learnMediaRecorder.pause(); } catch(e) {}
     state.learnPaused = true;
+    _learnPauseStart = Date.now();  // 记录暂停开始时间
     // 暂停时发送keepalive防止WS断开
     startLearnKeepAlive();
     document.getElementById('learnPauseBtn').textContent = '▶️ 继续';
@@ -2327,12 +2357,19 @@ function stopLearnRecording() {
   state.learnPaused = false;
   stopLearnKeepAlive();
   clearInterval(state.learnTimerVar);
+  // 取消待执行的重连定时器
+  if (_learnReconnectTimer) { clearTimeout(_learnReconnectTimer); _learnReconnectTimer = null; }
 
   // 关闭 WebSocket → 服务端发送 done 消息 → 触发 learnGenerateSummary
   if (state.learnSttWs && state.learnSttWs.readyState === WebSocket.OPEN) {
     // 先移除 onmessage 防止 done 消息和兜底代码双重触发
     state.learnSttWs.onmessage = null;
+    state.learnSttWs.onclose = null;  // 防止关闭时触发自动重连
     state.learnSttWs.close();
+    state.learnSttWs = null;
+  } else if (state.learnSttWs) {
+    state.learnSttWs.onmessage = null;
+    state.learnSttWs.onclose = null;
     state.learnSttWs = null;
   }
 
@@ -2367,6 +2404,17 @@ function stopLearnRecording() {
   }
 }
 
+// 学习录音 WS 自动重连相关
+let _learnWsReconnectCount = 0;
+const MAX_LEARN_WS_RECONNECTS = 5;
+let _learnReconnectTimer = null;
+let _learnSessionPrefix = '';  // 重连后保留的前段文本（跨session拼接）
+
+// 学习录音计时（使用墙钟时间，不受浏览器节流影响）
+let _learnStartWall = 0;
+let _learnPausedMs = 0;
+let _learnPauseStart = 0;
+
 // KeepAlive：暂停时定期发送静音帧防止WS断开（Paraformer ~20s无音频会断连）
 let learnKeepAliveTimer = null;
 function startLearnKeepAlive() {
@@ -2383,42 +2431,81 @@ function stopLearnKeepAlive() {
   if (learnKeepAliveTimer) { clearInterval(learnKeepAliveTimer); learnKeepAliveTimer = null; }
 }
 
-// WebSocket 重连
+// WebSocket 重连（自动/手动）
 async function reconnectLearnWs() {
   const apiKey = getApiKeyForSTT();
   if (!apiKey) return;
-  if (state.learnSttWs) { state.learnSttWs.onmessage = null; try { state.learnSttWs.close(); } catch(_) {} }
+
+  _learnWsReconnectCount++;
+  console.log('[DR-AI] 学习录音WS重连(第' + _learnWsReconnectCount + '次)...');
+
+  // 保留前段文本（重连后新session文本追加到旧文本后面）
+  const el = document.getElementById('learnText');
+  _learnSessionPrefix = el.value ? el.value + '\n' : '';
+
+  // 清理旧连接（nullify handlers 防止残留触发）
+  if (state.learnSttWs) {
+    state.learnSttWs.onmessage = null;
+    state.learnSttWs.onclose = null;
+    try { state.learnSttWs.close(); } catch(_) {}
+  }
+
   const ws = new WebSocket('ws://localhost:' + location.port + '/ws/transcribe?key=' + encodeURIComponent(apiKey) + '&mode=learn');
   state.learnSttWs = ws;
-  ws.onopen = () => { document.getElementById('learnLiveBadge').className = 'rec-live on'; };
+
+  ws.onopen = () => {
+    _learnWsReconnectCount = 0;  // 连接成功，重置计数
+    document.getElementById('learnLiveBadge').className = 'rec-live on';
+    document.getElementById('learnStatus').textContent = state.learnPaused ? '已暂停 · 实时转写' : '录音中 · 实时转写';
+    console.log('[DR-AI] 学习录音WS重连成功');
+  };
+
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
       if (msg.type === 'transcript') {
         const el = document.getElementById('learnText');
-        const existingText = el.value;
-        if (existingText && !msg.text.startsWith(existingText.slice(0, 20))) {
-          el.value = existingText + '\n' + msg.text;
-        } else {
-          el.value = msg.text;
-        }
+        el.value = _learnSessionPrefix + msg.text;
         el.scrollTop = el.scrollHeight;
       } else if (msg.type === 'done') {
         const el = document.getElementById('learnText');
-        const existingText = el.value;
-        if (existingText && !msg.text.startsWith(existingText.slice(0, 20))) {
-          el.value = existingText + '\n' + msg.text;
-        } else {
-          el.value = msg.text;
-        }
+        el.value = _learnSessionPrefix + msg.text;
         el.scrollTop = el.scrollHeight;
         document.getElementById('learnLiveBadge').className = 'rec-live off';
-        learnGenerateSummary(el.value, 'record');
+        // 只在录音已停止时才生成总结
+        if (!state.learnRecording) {
+          document.getElementById('learnStatus').textContent = '转写完成，正在生成学习总结...';
+          learnGenerateSummary(el.value, 'record');
+        } else {
+          document.getElementById('learnStatus').textContent = '转写会话结束，正在自动重连...';
+        }
+      } else if (msg.type === 'error') {
+        if (state.learnRecording) {
+          document.getElementById('learnStatus').textContent = '转写服务暂时断开，正在自动重连...';
+        } else {
+          document.getElementById('learnStatus').textContent = '转写出错: ' + msg.message;
+        }
       }
     } catch(_) {}
   };
+
   ws.onerror = () => { document.getElementById('learnLiveBadge').className = 'rec-live off'; };
-  ws.onclose = () => { document.getElementById('learnLiveBadge').className = 'rec-live off'; };
+
+  ws.onclose = () => {
+    document.getElementById('learnLiveBadge').className = 'rec-live off';
+    // 录音仍在进行 → 自动重连（最多5次）
+    if (state.learnRecording && !state.learnPaused && _learnWsReconnectCount < MAX_LEARN_WS_RECONNECTS) {
+      document.getElementById('learnStatus').textContent = '转写服务重连中(第' + (_learnWsReconnectCount + 1) + '次)...';
+      _learnReconnectTimer = setTimeout(() => {
+        if (state.learnRecording && !state.learnPaused) {
+          reconnectLearnWs();
+        }
+      }, 1000);
+    } else if (state.learnRecording && _learnWsReconnectCount >= MAX_LEARN_WS_RECONNECTS) {
+      document.getElementById('learnStatus').textContent = '⚠️ 转写服务多次断开，建议停止后重新开始';
+      showToast('转写服务连接不稳定，建议停止录音', 'error');
+    }
+  };
 }
 
 // AI 生成学习总结（防重复调用）
@@ -3949,7 +4036,10 @@ function inlineMd(text) {
 
 // ========== UTILS ==========
 function fmtTime(s) {
-  const m = Math.floor(s / 60); const sec = s % 60;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
   return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
 }
 
